@@ -9,12 +9,15 @@
 #endif
 
 #include "../common/pin.h"
+#include "../common/timer.h"
 
 
 #define SRCLK PinB3
 #define SRSER PinB4
 #define INCLK PinB0
 #define INSER PinB1
+#define SEG1 PinB2
+#define SEG2 PinB5
 
 // Least significant bit is on Q0
 //               XABCDEGF
@@ -31,11 +34,14 @@
 #define Seg7_Dash 0b00000010
 #define Seg7_Dot 0b10000000
 
-static uint16_t display_value;
-static uint8_t digit_count;
-static uint8_t ser_input;
-static uint8_t ser_input_pos;
-static bool ser_last_input_all_high;
+static volatile bool refresh_needed;
+static volatile uint16_t display_value;
+static volatile uint16_t display_dotmask;
+static volatile uint8_t digit_count;
+static volatile uint8_t ser_input;
+static volatile uint8_t ser_input_pos;
+static volatile bool ser_last_input_all_high;
+static uint8_t pin_to_refresh;
 
 static void toggleclk()
 {
@@ -71,26 +77,46 @@ static void senddigits(uint16_t val, uint8_t dotmask)
         }
         val /= 10;
     }
-    shiftsend(~tosend[0]);
+    pinlow(SEG1);
+    pinlow(SEG2);
+    if (pin_to_refresh == 0) {
+        shiftsend(~tosend[0]);
+        pinhigh(SEG1);
+        if (digit_count > 0) {
+            pin_to_refresh = 1;
+        }
+    } else if (pin_to_refresh == 1) {
+        shiftsend(~tosend[1]);
+        pinhigh(SEG2);
+        pin_to_refresh = 0;
+    }
 }
 
 static void push_digit(uint8_t value)
 {
-    uint8_t dotmask = 0;
+    uint8_t i;
 
-    if (value & (1 << 5)) {
-        dotmask = 1;
-        value &= (1 << 5);
+    if (value & 0b10000) {
+        display_dotmask |= (1 << digit_count);
+        value &= 0b1111;
     }
 
-    senddigits(value, dotmask);
+    for (i=0; i<digit_count; i++) {
+        value *= 10;
+    }
+    display_value += value;
+    digit_count++;
 }
 
 static void reset()
 {
+    display_value = 0;
+    display_dotmask = 0;
+    digit_count = 0;
     ser_input_pos = 0;
     ser_input = 0;
     ser_last_input_all_high = false;
+    pin_to_refresh = 0;
 }
 
 #ifndef SIMULATION
@@ -117,6 +143,15 @@ void seg7multiplex_int0_interrupt()
     }
 }
 
+#ifndef SIMULATION
+ISR(TIMER0_COMPA_vect)
+#else
+void seg7multiplex_timer0_interrupt()
+#endif
+{
+    refresh_needed = true;
+}
+
 void seg7multiplex_setup()
 {
 #ifndef SIMULATION
@@ -125,10 +160,21 @@ void seg7multiplex_setup()
 
     pinoutputmode(SRSER);
     pinoutputmode(SRCLK);
+    pinoutputmode(SEG1);
+    pinoutputmode(SEG2);
 
     reset();
+    refresh_needed = true;
+
+    // Set timer that controls refreshes
+    set_timer0_target(F_CPU / 1000); // every 1 ms
+    set_timer0_mode(TIMER_MODE_INTERRUPT);
 }
 
 void seg7multiplex_loop()
 {
+    if (refresh_needed) {
+        refresh_needed = false;
+        senddigits(display_value, display_dotmask);
+    }
 }

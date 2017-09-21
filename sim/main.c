@@ -33,6 +33,9 @@ int main(void)
         if (int0_interrupt_check()) {
             seg7multiplex_int0_interrupt();
         }
+        if (timer0_interrupt_check()) {
+            seg7multiplex_timer0_interrupt();
+        }
         seg7multiplex_loop();
         _delay_us(100);
     }

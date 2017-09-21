@@ -9,7 +9,7 @@ from icemu.seg7 import Segment7, combine_repr
 from icemu.ui import UIScreen
 
 class ATtiny45(Chip):
-    OUTPUT_PINS = ['B0', 'B1', 'B2', 'B3', 'B4']
+    OUTPUT_PINS = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5']
 
     def pin_from_int(self, val):
         PinB0 = 0b01000
@@ -17,12 +17,14 @@ class ATtiny45(Chip):
         PinB2 = 0b01010
         PinB3 = 0b01011
         PinB4 = 0b01100
+        PinB5 = 0b01101
         code = {
             PinB0: 'B0',
             PinB1: 'B1',
             PinB2: 'B2',
             PinB3: 'B3',
             PinB4: 'B4',
+            PinB5: 'B5',
         }[val]
         return self.getpin(code)
 
@@ -47,22 +49,53 @@ class SerialBuffer:
         self.ser.set(bool(val))
         self.clk.sethigh()
 
+
+class Timer:
+    def __init__(self):
+        self.cnt = 0
+        self.target = 0
+
+    def delay(self, us):
+        if self.target > 0:
+            self.cnt += us
+
+    def check(self):
+        if self.target <= 0:
+            return False
+        if self.cnt >= self.target:
+            self.cnt -= self.target
+            return True
+        else:
+            return False
+
+    def set_target(self, target):
+        self.target = target
+        self.cnt = 0
+
+
 class Circuit:
     def __init__(self):
         self.mcu = ATtiny45()
         self.serial_buffer = SerialBuffer(self.mcu.pin_B1, self.mcu.pin_B0)
         self.sr = CD74AC164()
-        self.segs = [Segment7() for _ in range(8)]
+        self.segs = [Segment7() for _ in range(2)]
+        for seg in self.segs[2:]:
+            seg.vcc.setlow()
+        self.timer0 = Timer()
         self.value = 0
 
         self.sr.pin_CP.wire_to(self.mcu.pin_B3)
         self.sr.pin_DS1.wire_to(self.mcu.pin_B4)
 
-        self.segs[0].wirepins(
-            self.sr,
-            ['F', 'G', 'E', 'D', 'C', 'B', 'A', 'DP'],
-            ['Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7'],
-        )
+        self.segs[0].vcc.wire_to(self.mcu.pin_B2)
+        self.segs[1].vcc.wire_to(self.mcu.pin_B5)
+
+        for seg in self.segs[:2]:
+            seg.wirepins(
+                self.sr,
+                ['F', 'G', 'E', 'D', 'C', 'B', 'A', 'DP'],
+                ['Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7'],
+            )
 
         self.increase_value(0)
 
@@ -79,17 +112,21 @@ class Circuit:
         self.serial_buffer.push(enable_dot)
 
     def delay(self, us):
-        begin = time.time()
-        end = begin + us / (1000 * 1000)
-        while circuit and time.time() < end:
-            if uiscreen:
-                uiscreen.refresh()
+        if uiscreen:
+            uiscreen.tick(us)
+            uiscreen.refresh()
+        self.timer0.delay(us)
+        for seg in self.segs:
+            seg.tick(us)
+        if uiscreen:
+            uiscreen.refresh()
 
     def increase_value(self, amount):
-        self.value += amount
-        self.value = max(0, min(9, self.value))
+        newval = max(0, min(99, self.value + amount))
+        self.value = newval
         self.pushreset()
-        self.pushdigit(self.value, False)
+        self.pushdigit(newval % 10, False)
+        self.pushdigit((newval // 10) % 10, True)
 
 circuit = None
 uiscreen = None
@@ -97,8 +134,6 @@ uiscreen = None
 def pinset(pin_number, high):
     pin = circuit.mcu.pin_from_int(pin_number)
     pin.set(high)
-    if uiscreen:
-        uiscreen.refresh()
 
 def pinishigh(pin_number):
     pin = circuit.mcu.pin_from_int(pin_number)
@@ -120,10 +155,19 @@ def int0_interrupt_check():
     else:
         return False
 
+def set_timer0_target(ticks):
+    circuit.timer0.set_target(ticks)
+
+def set_timer0_mode(mode):
+    pass
+
+def timer0_interrupt_check():
+    return circuit.timer0.check()
+
 def main():
     global circuit, uiscreen
     circuit = Circuit()
-    uiscreen = UIScreen()
+    uiscreen = UIScreen(refresh_rate_us=(100 * 1000)) # 100ms
     uiscreen.add_element(
         "LED Matrix output:",
         partial(combine_repr, *circuit.segs[::-1])
@@ -135,6 +179,10 @@ def main():
     uiscreen.add_element(
         "Raw SR:",
         lambda: str(circuit.sr)
+    )
+    uiscreen.add_element(
+        "SEG pins:",
+        lambda: "{} {}".format(circuit.segs[0].vcc, circuit.segs[1].vcc)
     )
     uiscreen.add_action(
         '+', "Increase",
