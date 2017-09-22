@@ -13,12 +13,10 @@ that determines if the dot is shown or not.
 This is done for each digit that needs to be shown (starting with the rightmost digit). Thus, to
 show 2 digits, we send 10 bits.
 
-To send a new set of digits, the reset code has to be send. This reset code is 5 high bits followed
-by 5 low bits. After these 10 bits have been sent in this order, the serial data being received
-start from the beginning again.
+When you're finished sending serial data, send 5 high bits to signify that you're finished so that
+we can resume refreshing the display. There's a max serial inactivity delay of 3 refresh cycles (
+one cycle is 1ms). After that, we consider that you're finished sending serial data and your next
+digit will be the first of the serie.
 
-We send two sets of 5 bits instead of one so that when we send this code, we're sure that our
-5bit clocking is in sync.
-
-The board itself takes care of properly refreshing the displays. We only need to send new digits
-when they change.
+The board itself takes care of properly refreshing the displays. We refresh one display every 1ms,
+cycling over active displays. We only need to send new digits when they change.

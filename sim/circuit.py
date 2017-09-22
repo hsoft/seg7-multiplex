@@ -99,11 +99,9 @@ class Circuit:
 
         self.increase_value(0)
 
-    def pushreset(self):
+    def pushstop(self):
         for _ in range(5):
             self.serial_buffer.push(True)
-        for _ in range(5):
-            self.serial_buffer.push(False)
 
     def pushdigit(self, digit, enable_dot):
         assert digit >= 0 and digit < 10
@@ -124,9 +122,9 @@ class Circuit:
     def increase_value(self, amount):
         newval = max(0, min(99, self.value + amount))
         self.value = newval
-        self.pushreset()
         self.pushdigit(newval % 10, False)
         self.pushdigit((newval // 10) % 10, True)
+        self.pushstop()
 
 circuit = None
 uiscreen = None

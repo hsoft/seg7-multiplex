@@ -34,13 +34,15 @@
 #define Seg7_Dash 0b00000010
 #define Seg7_Dot 0b10000000
 
+#define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
+
 static volatile bool refresh_needed;
 static volatile uint16_t display_value;
 static volatile uint16_t display_dotmask;
 static volatile uint8_t digit_count;
 static volatile uint8_t ser_input;
 static volatile uint8_t ser_input_pos;
-static volatile bool ser_last_input_all_high;
+static volatile uint8_t ser_timeout;
 static uint8_t pin_to_refresh;
 
 static void toggleclk()
@@ -82,7 +84,7 @@ static void senddigits(uint16_t val, uint8_t dotmask)
     if (pin_to_refresh == 0) {
         shiftsend(~tosend[0]);
         pinhigh(SEG1);
-        if (digit_count > 0) {
+        if (digit_count > 1) {
             pin_to_refresh = 1;
         }
     } else if (pin_to_refresh == 1) {
@@ -115,8 +117,9 @@ static void reset()
     digit_count = 0;
     ser_input_pos = 0;
     ser_input = 0;
-    ser_last_input_all_high = false;
+    ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
     pin_to_refresh = 0;
+    refresh_needed = false;
 }
 
 #ifndef SIMULATION
@@ -125,18 +128,20 @@ ISR(INT0_vect)
 void seg7multiplex_int0_interrupt()
 #endif
 {
+    if (ser_timeout == 0) {
+        reset();
+    }
+
     if (pinishigh(INSER)) {
         ser_input |= (1 << ser_input_pos);
     }
     ser_input_pos++;
     if (ser_input_pos == 5) {
         if (ser_input == 0x1f) {
-            ser_last_input_all_high = true;
-        } else if ((ser_input == 0) && ser_last_input_all_high) {
-            reset();
+            ser_timeout = 0;
         } else {
             push_digit(ser_input);
-            ser_last_input_all_high = false;
+            ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
         }
         ser_input = 0;
         ser_input_pos = 0;
@@ -149,7 +154,13 @@ ISR(TIMER0_COMPA_vect)
 void seg7multiplex_timer0_interrupt()
 #endif
 {
-    refresh_needed = true;
+    if (ser_timeout == 0) {
+        refresh_needed = true;
+    } else {
+        // We don't refresh while we receive serial signal, but we give ourselves a maximum number
+        // of cycle before we say "screw that, you're taking too long.
+        ser_timeout--;
+    }
 }
 
 void seg7multiplex_setup()
