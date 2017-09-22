@@ -183,12 +183,16 @@ def main():
         lambda: str(circuit.value)
     )
     uiscreen.add_element(
-        "Raw SR:",
-        lambda: str(circuit.sr)
+        "Shift Register:",
+        circuit.sr.asciiart
     )
     uiscreen.add_element(
-        "SEG pins:",
-        lambda: " ".join(str(seg.vcc) for seg in circuit.segs)
+        "Decoder:",
+        circuit.dec.asciiart
+    )
+    uiscreen.add_element(
+        "Inverter:",
+        circuit.inv.asciiart
     )
     uiscreen.add_action(
         '+', "Increase",
