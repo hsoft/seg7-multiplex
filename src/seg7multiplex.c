@@ -16,8 +16,8 @@
 #define SRSER PinB4
 #define INCLK PinB0
 #define INSER PinB1
-#define SEG1 PinB2
-#define SEG2 PinB5
+#define SEGDEC1 PinB2
+#define SEGDEC2 PinB5
 
 // Least significant bit is on Q0
 //               XABCDEGF
@@ -36,6 +36,12 @@
 
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
 
+typedef enum {
+    SEG_VCC_PIN1,
+    SEG_VCC_PIN2,
+    SEG_VCC_PIN3,
+} SEG_VCC_PIN;
+
 static volatile bool refresh_needed;
 static volatile uint16_t display_value;
 static volatile uint16_t display_dotmask;
@@ -44,6 +50,31 @@ static volatile uint8_t ser_input;
 static volatile uint8_t ser_input_pos;
 static volatile uint8_t ser_timeout;
 static uint8_t pin_to_refresh;
+
+static void disable_all_segs()
+{
+    // select y3 on the decoder
+    pinhigh(SEGDEC1);
+    pinhigh(SEGDEC2);
+}
+
+static void enable_seg(SEG_VCC_PIN pin)
+{
+    switch (pin) {
+        case SEG_VCC_PIN1: // y0
+            pinlow(SEGDEC1);
+            pinlow(SEGDEC2);
+            break;
+        case SEG_VCC_PIN2: // y1
+            pinhigh(SEGDEC1);
+            pinlow(SEGDEC2);
+            break;
+        case SEG_VCC_PIN3: // y2
+            pinhigh(SEGDEC2);
+            pinlow(SEGDEC1);
+            break;
+    }
+}
 
 static void toggleclk()
 {
@@ -79,17 +110,19 @@ static void senddigits(uint16_t val, uint8_t dotmask)
         }
         val /= 10;
     }
-    pinlow(SEG1);
-    pinlow(SEG2);
+    disable_all_segs();
     if (pin_to_refresh == 0) {
         shiftsend(~tosend[0]);
-        pinhigh(SEG1);
-        if (digit_count > 1) {
-            pin_to_refresh = 1;
-        }
+        enable_seg(SEG_VCC_PIN1);
     } else if (pin_to_refresh == 1) {
         shiftsend(~tosend[1]);
-        pinhigh(SEG2);
+        enable_seg(SEG_VCC_PIN2);
+    } else if (pin_to_refresh == 2) {
+        shiftsend(~tosend[2]);
+        enable_seg(SEG_VCC_PIN3);
+    }
+    pin_to_refresh++;
+    if (pin_to_refresh == digit_count) {
         pin_to_refresh = 0;
     }
 }
@@ -171,8 +204,8 @@ void seg7multiplex_setup()
 
     pinoutputmode(SRSER);
     pinoutputmode(SRCLK);
-    pinoutputmode(SEG1);
-    pinoutputmode(SEG2);
+    pinoutputmode(SEGDEC1);
+    pinoutputmode(SEGDEC2);
 
     reset();
     refresh_needed = true;

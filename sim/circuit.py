@@ -1,11 +1,12 @@
 from functools import partial
 import os
 import signal
-import time
 
 from icemu.chip import Chip
 from icemu.shiftregisters import CD74AC164
 from icemu.seg7 import Segment7, combine_repr
+from icemu.decoders import SN74HC138
+from icemu.gates import SN74HC14
 from icemu.ui import UIScreen
 
 class ATtiny45(Chip):
@@ -78,24 +79,28 @@ class Circuit:
         self.mcu = ATtiny45()
         self.serial_buffer = SerialBuffer(self.mcu.pin_B1, self.mcu.pin_B0)
         self.sr = CD74AC164()
-        self.segs = [Segment7() for _ in range(2)]
-        for seg in self.segs[2:]:
-            seg.vcc.setlow()
+        self.segs = [Segment7() for _ in range(3)]
+        self.dec = SN74HC138()
+        self.inv = SN74HC14()
         self.timer0 = Timer()
-        self.value = 0
+        self.value = 123
 
         self.sr.pin_CP.wire_to(self.mcu.pin_B3)
         self.sr.pin_DS1.wire_to(self.mcu.pin_B4)
 
-        self.segs[0].vcc.wire_to(self.mcu.pin_B2)
-        self.segs[1].vcc.wire_to(self.mcu.pin_B5)
+        self.dec.pin_A.wire_to(self.mcu.pin_B2)
+        self.dec.pin_B.wire_to(self.mcu.pin_B5)
 
-        for seg in self.segs[:2]:
+        for decpin, invpin in zip(self.dec.getpins(self.dec.OUTPUT_PINS), self.inv.getpins(self.inv.INPUT_PINS)):
+            invpin.wire_to(decpin)
+
+        for seg, invpin in zip(self.segs, self.inv.getpins(self.inv.OUTPUT_PINS)):
             seg.wirepins(
                 self.sr,
                 ['F', 'G', 'E', 'D', 'C', 'B', 'A', 'DP'],
                 ['Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7'],
             )
+            seg.vcc.wire_to(invpin)
 
         self.increase_value(0)
 
@@ -120,10 +125,13 @@ class Circuit:
             uiscreen.refresh()
 
     def increase_value(self, amount):
-        newval = max(0, min(99, self.value + amount))
+        newval = max(0, min(999, self.value + amount))
         self.value = newval
         self.pushdigit(newval % 10, False)
-        self.pushdigit((newval // 10) % 10, True)
+        if newval > 9:
+            self.pushdigit((newval // 10) % 10, False)
+        if newval > 99:
+            self.pushdigit((newval // 100) % 10, False)
         self.pushstop()
 
 circuit = None
@@ -180,7 +188,7 @@ def main():
     )
     uiscreen.add_element(
         "SEG pins:",
-        lambda: "{} {}".format(circuit.segs[0].vcc, circuit.segs[1].vcc)
+        lambda: " ".join(str(seg.vcc) for seg in circuit.segs)
     )
     uiscreen.add_action(
         '+', "Increase",
