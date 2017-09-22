@@ -20,3 +20,11 @@ digit will be the first of the serie.
 
 The board itself takes care of properly refreshing the displays. We refresh one display every 1ms,
 cycling over active displays. We only need to send new digits when they change.
+
+## Simulation
+
+This project can be simulated on a desktop computer! The simulation uses [icemu][icemu] and
+requires Python 3.4+ with development header (`python3-dev` on Ubuntu). Once you have that,
+`cd` into `sim` and run `make`, then `./seg7multiplex`. You'll get something like this:
+
+[![asciinema](https://asciinema.org/a/WsYhXc1VcgfmkKZ8SAT18xYjv.png)](https://asciinema.org/a/WsYhXc1VcgfmkKZ8SAT18xYjv)
