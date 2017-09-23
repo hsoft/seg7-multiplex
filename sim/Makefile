@@ -1,6 +1,6 @@
 OBJS = main.o
 OBJS += $(addprefix ../src/, seg7multiplex.o)
-OBJS += $(addprefix ../common/, sim.o sim_pin.o sim_timer.o)
+OBJS += $(addprefix ../common/, sim.o sim_pin.o sim_timer.o intmath.o)
 PROGNAME = seg7multiplex
 
 PYTHON ?= python3

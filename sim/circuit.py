@@ -3,10 +3,8 @@ import os
 import signal
 
 from icemu.chip import Chip
-from icemu.shiftregisters import CD74AC164
+from icemu.shiftregisters import SN74HC595
 from icemu.seg7 import Segment7, combine_repr
-from icemu.decoders import SN74HC138
-from icemu.gates import SN74HC14
 from icemu.ui import UIScreen
 
 class ATtiny45(Chip):
@@ -78,29 +76,27 @@ class Circuit:
     def __init__(self):
         self.mcu = ATtiny45()
         self.serial_buffer = SerialBuffer(self.mcu.pin_B1, self.mcu.pin_B0)
-        self.sr = CD74AC164()
-        self.segs = [Segment7() for _ in range(3)]
-        self.dec = SN74HC138()
-        self.inv = SN74HC14()
+        self.sr1 = SN74HC595()
+        self.sr2 = SN74HC595()
+        self.segs = [Segment7() for _ in range(8)]
         self.timer0 = Timer()
-        self.value = 123
+        self.value = 87654321
 
-        self.sr.pin_CP.wire_to(self.mcu.pin_B3)
-        self.sr.pin_DS1.wire_to(self.mcu.pin_B4)
+        self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B3)
+        self.sr1.pin_SER.wire_to(self.mcu.pin_B4)
+        self.sr1.pin_RCLK.wire_to(self.mcu.pin_B5)
 
-        self.dec.pin_A.wire_to(self.mcu.pin_B2)
-        self.dec.pin_B.wire_to(self.mcu.pin_B5)
+        self.sr2.pin_SRCLK.wire_to(self.mcu.pin_B2)
+        self.sr2.pin_SER.wire_to(self.mcu.pin_B4)
+        self.sr2.pin_RCLK.wire_to(self.mcu.pin_B5)
 
-        for decpin, invpin in zip(self.dec.getpins(self.dec.OUTPUT_PINS), self.inv.getpins(self.inv.INPUT_PINS)):
-            invpin.wire_to(decpin)
-
-        for seg, invpin in zip(self.segs, self.inv.getpins(self.inv.OUTPUT_PINS)):
+        for seg, sr2pin in zip(self.segs, self.sr2.getpins(self.sr2.OUTPUT_PINS)):
             seg.wirepins(
-                self.sr,
+                self.sr1,
                 ['F', 'G', 'E', 'D', 'C', 'B', 'A', 'DP'],
-                ['Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7'],
+                self.sr1.OUTPUT_PINS,
             )
-            seg.vcc.wire_to(invpin)
+            seg.vcc.wire_to(sr2pin)
 
         self.increase_value(0)
 
@@ -125,13 +121,11 @@ class Circuit:
             uiscreen.refresh()
 
     def increase_value(self, amount):
-        newval = max(0, min(999, self.value + amount))
+        newval = max(0, min(99999999, self.value + amount))
         self.value = newval
-        self.pushdigit(newval % 10, False)
-        if newval > 9:
-            self.pushdigit((newval // 10) % 10, False)
-        if newval > 99:
-            self.pushdigit((newval // 100) % 10, False)
+        while newval:
+            self.pushdigit(newval % 10, False)
+            newval //= 10
         self.pushstop()
 
 circuit = None
@@ -183,16 +177,12 @@ def main():
         lambda: str(circuit.value)
     )
     uiscreen.add_element(
-        "Shift Register:",
-        circuit.sr.asciiart
+        "SR1:",
+        circuit.sr1.asciiart
     )
     uiscreen.add_element(
-        "Decoder:",
-        circuit.dec.asciiart
-    )
-    uiscreen.add_element(
-        "Inverter:",
-        circuit.inv.asciiart
+        "SR2:",
+        circuit.sr2.asciiart
     )
     uiscreen.add_action(
         '+', "Increase",

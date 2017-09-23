@@ -10,14 +10,15 @@
 
 #include "../common/pin.h"
 #include "../common/timer.h"
+#include "../common/intmath.h"
 
 
 #define SRCLK PinB3
 #define SRSER PinB4
 #define INCLK PinB0
 #define INSER PinB1
-#define SEGDEC1 PinB2
-#define SEGDEC2 PinB5
+#define SEGCP PinB2
+#define RCLK PinB5
 
 // Least significant bit is on Q0
 //               XABCDEGF
@@ -35,52 +36,22 @@
 #define Seg7_Dot 0b10000000
 
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
-
-typedef enum {
-    SEG_VCC_PIN1,
-    SEG_VCC_PIN2,
-    SEG_VCC_PIN3,
-} SEG_VCC_PIN;
+#define MAX_DIGITS 8
 
 static volatile bool refresh_needed;
-static volatile uint16_t display_value;
-static volatile uint16_t display_dotmask;
+static volatile uint32_t display_value;
+static volatile uint8_t display_dotmask;
 static volatile uint8_t digit_count;
 static volatile uint8_t ser_input;
 static volatile uint8_t ser_input_pos;
 static volatile uint8_t ser_timeout;
 static uint8_t pin_to_refresh;
 
-static void disable_all_segs()
+static void toggleclk(Pin pin)
 {
-    // select y3 on the decoder
-    pinhigh(SEGDEC1);
-    pinhigh(SEGDEC2);
-}
-
-static void enable_seg(SEG_VCC_PIN pin)
-{
-    switch (pin) {
-        case SEG_VCC_PIN1: // y0
-            pinlow(SEGDEC1);
-            pinlow(SEGDEC2);
-            break;
-        case SEG_VCC_PIN2: // y1
-            pinhigh(SEGDEC1);
-            pinlow(SEGDEC2);
-            break;
-        case SEG_VCC_PIN3: // y2
-            pinhigh(SEGDEC2);
-            pinlow(SEGDEC1);
-            break;
-    }
-}
-
-static void toggleclk()
-{
-    pinlow(SRCLK);
+    pinlow(pin);
     _delay_us(100);
-    pinhigh(SRCLK);
+    pinhigh(pin);
 }
 
 // LSB goes on q0
@@ -90,56 +61,42 @@ static void shiftsend(uint8_t val)
 
     for (i=7; i>=0; i--) {
         pinset(SRSER, val & (1 << i));
-        toggleclk();
+        toggleclk(SRCLK);
     }
 }
 
-static void senddigits(uint16_t val, uint8_t dotmask)
+static void senddigits(uint32_t val, uint8_t dotmask)
 {
     uint8_t digits[10] = {Seg7_0, Seg7_1, Seg7_2, Seg7_3, Seg7_4, Seg7_5, Seg7_6, Seg7_7, Seg7_8, Seg7_9};
-    uint8_t tosend[3];
-    uint8_t i;
+    uint8_t tosend;
 
-    if (val > 999) {
-        dotmask |= 0b100;
+    val /= int_pow10(pin_to_refresh);
+    tosend = digits[val % 10];
+    if (dotmask & (1 << pin_to_refresh)) {
+        tosend |= Seg7_Dot;
     }
-    for (i=0; i<=2; i++) {
-        tosend[i] = digits[val % 10];
-        if (dotmask & (1 << i)) {
-            tosend[i] |= Seg7_Dot;
-        }
-        val /= 10;
-    }
-    disable_all_segs();
-    if (pin_to_refresh == 0) {
-        shiftsend(~tosend[0]);
-        enable_seg(SEG_VCC_PIN1);
-    } else if (pin_to_refresh == 1) {
-        shiftsend(~tosend[1]);
-        enable_seg(SEG_VCC_PIN2);
-    } else if (pin_to_refresh == 2) {
-        shiftsend(~tosend[2]);
-        enable_seg(SEG_VCC_PIN3);
-    }
+    pinset(SRSER, pin_to_refresh == 0);
+    toggleclk(SEGCP);
+    pinlow(RCLK);
+    shiftsend(~tosend);
+    pinhigh(RCLK);
     pin_to_refresh++;
-    if (pin_to_refresh == digit_count) {
+    if (pin_to_refresh == MAX_DIGITS) {
         pin_to_refresh = 0;
     }
 }
 
 static void push_digit(uint8_t value)
 {
-    uint8_t i;
+    uint32_t amount_to_add;
 
     if (value & 0b10000) {
         display_dotmask |= (1 << digit_count);
         value &= 0b1111;
     }
 
-    for (i=0; i<digit_count; i++) {
-        value *= 10;
-    }
-    display_value += value;
+    amount_to_add = value * int_pow10(digit_count);
+    display_value += amount_to_add;
     digit_count++;
 }
 
@@ -204,8 +161,8 @@ void seg7multiplex_setup()
 
     pinoutputmode(SRSER);
     pinoutputmode(SRCLK);
-    pinoutputmode(SEGDEC1);
-    pinoutputmode(SEGDEC2);
+    pinoutputmode(SEGCP);
+    pinoutputmode(RCLK);
 
     reset();
     refresh_needed = true;
