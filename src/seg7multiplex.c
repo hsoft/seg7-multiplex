@@ -14,11 +14,10 @@
 
 
 #define SRCLK PinB3
-#define SRSER PinB4
+#define SER PinB4
 #define INCLK PinB0
-#define INSER PinB1
 #define SEGCP PinB2
-#define RCLK PinB5
+#define RCLK PinB1
 
 // Least significant bit is on Q0
 //               XABCDEGF
@@ -60,7 +59,7 @@ static void shiftsend(uint8_t val)
     char i;
 
     for (i=7; i>=0; i--) {
-        pinset(SRSER, val & (1 << i));
+        pinset(SER, val & (1 << i));
         toggleclk(SRCLK);
     }
 }
@@ -75,7 +74,7 @@ static void senddigits(uint32_t val, uint8_t dotmask)
     if (dotmask & (1 << pin_to_refresh)) {
         tosend |= Seg7_Dot;
     }
-    pinset(SRSER, pin_to_refresh == 0);
+    pinset(SER, pin_to_refresh == 0);
     toggleclk(SEGCP);
     pinlow(RCLK);
     shiftsend(~tosend);
@@ -122,9 +121,12 @@ void seg7multiplex_int0_interrupt()
         reset();
     }
 
-    if (pinishigh(INSER)) {
+    pininputmode(SER);
+    if (pinishigh(SER)) {
         ser_input |= (1 << ser_input_pos);
     }
+    pinoutputmode(SER);
+
     ser_input_pos++;
     if (ser_input_pos == 5) {
         if (ser_input == 0x1f) {
@@ -159,7 +161,7 @@ void seg7multiplex_setup()
     sei();
 #endif
 
-    pinoutputmode(SRSER);
+    pinoutputmode(SER);
     pinoutputmode(SRCLK);
     pinoutputmode(SEGCP);
     pinoutputmode(RCLK);

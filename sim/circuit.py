@@ -8,7 +8,7 @@ from icemu.seg7 import Segment7, combine_repr
 from icemu.ui import UIScreen
 
 class ATtiny45(Chip):
-    OUTPUT_PINS = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5']
+    OUTPUT_PINS = ['B0', 'B1', 'B2', 'B3', 'B4']
 
     def pin_from_int(self, val):
         PinB0 = 0b01000
@@ -16,14 +16,12 @@ class ATtiny45(Chip):
         PinB2 = 0b01010
         PinB3 = 0b01011
         PinB4 = 0b01100
-        PinB5 = 0b01101
         code = {
             PinB0: 'B0',
             PinB1: 'B1',
             PinB2: 'B2',
             PinB3: 'B3',
             PinB4: 'B4',
-            PinB5: 'B5',
         }[val]
         return self.getpin(code)
 
@@ -75,7 +73,7 @@ class Timer:
 class Circuit:
     def __init__(self):
         self.mcu = ATtiny45()
-        self.serial_buffer = SerialBuffer(self.mcu.pin_B1, self.mcu.pin_B0)
+        self.serial_buffer = SerialBuffer(self.mcu.pin_B4, self.mcu.pin_B0)
         self.sr1 = SN74HC595()
         self.sr2 = SN74HC595()
         self.segs = [Segment7() for _ in range(8)]
@@ -84,11 +82,11 @@ class Circuit:
 
         self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B3)
         self.sr1.pin_SER.wire_to(self.mcu.pin_B4)
-        self.sr1.pin_RCLK.wire_to(self.mcu.pin_B5)
+        self.sr1.pin_RCLK.wire_to(self.mcu.pin_B1)
 
         self.sr2.pin_SRCLK.wire_to(self.mcu.pin_B2)
         self.sr2.pin_SER.wire_to(self.mcu.pin_B4)
-        self.sr2.pin_RCLK.wire_to(self.mcu.pin_B5)
+        self.sr2.pin_RCLK.wire_to(self.mcu.pin_B1)
 
         for seg, sr2pin in zip(self.segs, self.sr2.getpins(self.sr2.OUTPUT_PINS)):
             seg.wirepins(
