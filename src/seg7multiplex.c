@@ -49,7 +49,7 @@ static uint8_t pin_to_refresh;
 static void toggleclk(Pin pin)
 {
     pinlow(pin);
-    _delay_us(100);
+    _delay_us(1);
     pinhigh(pin);
 }
 
@@ -75,10 +75,11 @@ static void senddigits(uint32_t val, uint8_t dotmask)
         tosend |= Seg7_Dot;
     }
     pinset(SER, pin_to_refresh == 0);
-    toggleclk(SEGCP);
+    toggleclk(SEGCP); // SEGCP is now high, meaning that OE is disabled
     pinlow(RCLK);
     shiftsend(~tosend);
     pinhigh(RCLK);
+    pinlow(SEGCP); // OE is now enabled!
     pin_to_refresh++;
     if (pin_to_refresh == MAX_DIGITS) {
         pin_to_refresh = 0;
@@ -165,12 +166,13 @@ void seg7multiplex_setup()
     pinoutputmode(SRCLK);
     pinoutputmode(SEGCP);
     pinoutputmode(RCLK);
+    pinlow(SEGCP);
 
     reset();
     refresh_needed = true;
 
     // Set timer that controls refreshes
-    set_timer0_target(F_CPU / 1000); // every 1 ms
+    set_timer0_target(1000); // every 1 ms
     set_timer0_mode(TIMER_MODE_INTERRUPT);
 }
 

@@ -1,45 +1,22 @@
 #include <stdio.h>
 #include <unistd.h>
-#include <signal.h>
-#include <Python.h>
 #include "../src/seg7multiplex.h"
-#include "../common/sim.h"
-
-static volatile sig_atomic_t should_stop = 0;
-
-void handle_signal(int sig)
-{
-    should_stop = 1;
-}
+#include "icemu/capi/icemu.h"
+#include "icemu/capi/avr/attiny.h"
 
 int main(void)
 {
-    PyGILState_STATE gilState;
-    FILE *fp;
-
-    signal(SIGINT, handle_signal);
-
-    printf("Initializing...\n");
-    Py_Initialize();
-    gilState = PyGILState_Ensure();
-    fp = fopen("circuit.py", "r");
-    PyRun_SimpleFile(fp, "circuit.py");
-    fclose(fp);
-    PyGILState_Release(gilState);
-
     seg7multiplex_setup();
 
-    while (!should_stop) {
-        if (int0_interrupt_check()) {
+    while (1) {
+        if (icemu_check_interrupt() == ICEMU_INT0) {
             seg7multiplex_int0_interrupt();
+            icemu_end_interrupt();
         }
-        if (timer0_interrupt_check()) {
+        if (icemu_check_timer(ICEMU_TIMER0)) {
             seg7multiplex_timer0_interrupt();
         }
         seg7multiplex_loop();
-        _delay_us(100);
+        icemu_process_messages();
     }
-
-    sim_stop();
-    Py_Finalize();
 }

@@ -1,16 +1,12 @@
 OBJS = main.o
 OBJS += $(addprefix ../src/, seg7multiplex.o)
-OBJS += $(addprefix ../common/, sim.o sim_pin.o sim_timer.o intmath.o)
+OBJS += $(addprefix ../common/, sim_pin.o sim_timer.o intmath.o)
+OBJS += $(addprefix icemu/capi/, icemu.o)
 PROGNAME = seg7multiplex
 
-PYTHON ?= python3
-PYTHONVERSION := $(shell $(PYTHON) -c "import sysconfig; print(sysconfig.get_python_version(), end='')")
-INCS := $(shell pkg-config --cflags python-$(PYTHONVERSION))
-LIBS := $(shell pkg-config --libs python-$(PYTHONVERSION))
-
 EXTRACFLAGS ?= 
-CFLAGS = $(INCS) -DSIMULATION -Wall $(EXTRACFLAGS) -c
-LDFLAGS = $(LIBS)
+CFLAGS = -I. -DSIMULATION -Wall $(EXTRACFLAGS) -c
+LDFLAGS = -I.
 
 SUBMODULE_TARGETS = ../common/README.md
 
