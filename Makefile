@@ -7,7 +7,7 @@ AVRDUDEMCU ?= t45
 AVRDUDEARGS ?= -c usbtiny -P usb 
 
 OBJS = $(addprefix src/, main.o seg7multiplex.o)
-OBJS += $(addprefix common/, pin.o timer.o)
+OBJS += $(addprefix common/, pin.o timer.o intmath.o)
 PROGNAME = seg7multiplex
 
 CC = avr-gcc
