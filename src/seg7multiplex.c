@@ -13,10 +13,10 @@
 #include "../common/intmath.h"
 
 
-#define SRCLK PinB3
+#define SRCLK PinB2
 #define SER PinB4
 #define INCLK PinB0
-#define SEGCP PinB2
+#define SEGCP PinB3
 #define RCLK PinB1
 
 // Least significant bit is on Q0

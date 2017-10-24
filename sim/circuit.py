@@ -18,14 +18,14 @@ class Circuit(SimulationWithUI):
         self.in_ser = Pin(code='INSER', output=True)
         self.mcu.pin_B4.wire_to(self.in_ser)
 
-        self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B3)
+        self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B2)
         self.sr1.pin_SER.wire_to(self.mcu.pin_B4)
         self.sr1.pin_RCLK.wire_to(self.mcu.pin_B1)
 
-        self.sr2.pin_SRCLK.wire_to(self.mcu.pin_B2)
+        self.sr2.pin_SRCLK.wire_to(self.mcu.pin_B3)
         self.sr2.pin_SER.wire_to(self.mcu.pin_B4)
         self.sr2.pin_RCLK.wire_to(self.mcu.pin_B1)
-        self.sr2.pin_OE.wire_to(self.mcu.pin_B2)
+        self.sr2.pin_OE.wire_to(self.mcu.pin_B3)
 
         for seg, sr2pin in zip(self.segs, self.sr2.getpins(self.sr2.OUTPUT_PINS)):
             seg.wirepins(
