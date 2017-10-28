@@ -5,39 +5,28 @@ F_CPU ?= 1000000UL
 
 AVRDUDEMCU ?= t45
 AVRDUDEARGS ?= -c usbtiny -P usb 
-
-OBJS = $(addprefix src/, main.o seg7multiplex.o)
-OBJS += $(addprefix common/, pin.o timer.o intmath.o)
-PROGNAME = seg7multiplex
-
 CC = avr-gcc
-EXTRACFLAGS ?= 
-CFLAGS = -O3 -Wall $(EXTRACFLAGS) -DF_CPU=$(F_CPU) -mmcu=$(MCU) -c
-LDFLAGS = -mmcu=$(MCU)
 
 SUBMODULE_TARGETS = common/README.md
 
-# Patterns
+OBJS = $(addprefix src/, main.o seg7multiplex.o)
+OBJS += $(addprefix common/, pin.o timer.o intmath.o)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -o $@ $<
+TO_CLEAN = $(OBJS) $(PROGNAME).hex $(PROGNAME).bin
+
+ALL = $(SUBMODULE_TARGETS) $(PROGNAME).hex
+
+include common.mk
+
+CFLAGS = -O3 $(COMMON_CFLAGS) -DF_CPU=$(F_CPU) -mmcu=$(MCU) -c
+LDFLAGS = -mmcu=$(MCU)
 
 # Rules
 
-.PHONY: send clean
-
-all: $(SUBMODULE_TARGETS) $(PROGNAME).hex
-	@echo Done!
+.PHONY: send
 
 send: $(PROGNAME).hex
 	avrdude $(AVRDUDEARGS) -p $(AVRDUDEMCU) -U flash:w:$(PROGNAME).hex
-
-clean:
-	rm -f $(OBJS) $(PROGNAME).hex $(PROGNAME).bin
-
-$(SUBMODULE_TARGETS):
-	git submodule init
-	git submodule update
 
 $(PROGNAME).bin: $(OBJS)
 	$(CC) $(LDFLAGS) $+ -o $@

@@ -35,7 +35,9 @@
 #define Seg7_Dot 0b10000000
 
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
+#ifndef MAX_DIGITS
 #define MAX_DIGITS 8
+#endif
 
 static volatile bool refresh_needed;
 static volatile uint32_t display_value;

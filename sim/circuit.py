@@ -1,4 +1,6 @@
+import argparse
 from functools import partial
+from random import randint
 
 from icemu.mcu import ATtiny
 from icemu.shiftregisters import SN74HC595
@@ -7,13 +9,15 @@ from icemu.pin import Pin
 from icemu.ui import SimulationWithUI
 
 class Circuit(SimulationWithUI):
-    def __init__(self):
+    def __init__(self, max_digits):
+        # it's possible that 8 digits is too much for the simulation to run well at
+        # 10x slowdown. You might have to use a 100x slowdown... or use less digits
         super().__init__(usec_value=10)
         self.mcu = self.add_chip(ATtiny())
         self.sr1 = SN74HC595()
         self.sr2 = SN74HC595()
-        self.segs = [Segment7() for _ in range(8)]
-        self.value = 87654321
+        self.segs = [Segment7() for _ in range(max_digits)]
+        self.value = randint(1, (10**max_digits)-1)
 
         self.in_ser = Pin(code='INSER', output=True)
         self.mcu.pin_B4.wire_to(self.in_ser)
@@ -97,7 +101,8 @@ class Circuit(SimulationWithUI):
             seg.tick(self.TIME_RESOLUTION)
 
     def increase_value(self, amount):
-        newval = max(0, min(99999999, self.value + amount))
+        maxval = (10**len(self.segs)) - 1
+        newval = max(0, min(maxval, self.value + amount))
         self.value = newval
         while newval:
             self.pushdigit(newval % 10, False)
@@ -106,7 +111,10 @@ class Circuit(SimulationWithUI):
 
 
 def main():
-    circuit = Circuit()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--digits', type=int, default=8)
+    args = parser.parse_args()
+    circuit = Circuit(max_digits=args.digits)
     circuit.run()
 
 if __name__ == '__main__':
