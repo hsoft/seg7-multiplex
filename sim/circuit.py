@@ -8,8 +8,29 @@ from icemu.seg7 import Segment7, combine_repr
 from icemu.pin import Pin
 from icemu.ui import SimulationWithUI
 
+class SerialInput:
+    def __init__(self):
+        self.ser = Pin('SER', output=True)
+        self.clk = Pin('CLK', output=True)
+
+    def pushserial(self, high):
+        self.clk.setlow()
+        self.ser.set(bool(high))
+        self.clk.sethigh()
+
+    def pushstop(self):
+        for _ in range(5):
+            self.pushserial(True)
+
+    def pushdigit(self, digit, enable_dot):
+        assert digit >= 0 and digit < 10
+        for i in range(4):
+            self.pushserial(digit & (1 << i))
+        self.pushserial(enable_dot)
+
+
 class Circuit(SimulationWithUI):
-    def __init__(self, max_digits):
+    def __init__(self, max_digits, serial_input):
         # it's possible that 8 digits is too much for the simulation to run well at
         # 10x slowdown. You might have to use a 100x slowdown... or use less digits
         super().__init__(usec_value=10)
@@ -19,8 +40,10 @@ class Circuit(SimulationWithUI):
         self.segs = [Segment7() for _ in range(max_digits)]
         self.value = randint(1, (10**max_digits)-1)
 
-        self.in_ser = Pin(code='INSER', output=True)
-        self.mcu.pin_B4.wire_to(self.in_ser)
+        self.serial_input = serial_input
+        self.mcu.pin_B4.wire_to(self.serial_input.ser)
+        self.mcu.pin_B0.wire_to(self.serial_input.clk)
+        self.mcu.enable_interrupt_on_pin(self.mcu.pin_B0, rising=True)
 
         self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B2)
         self.sr1.pin_SER.wire_to(self.mcu.pin_B4)
@@ -81,20 +104,6 @@ class Circuit(SimulationWithUI):
         )
         uiscreen.refresh()
 
-    def pushserial(self, high):
-        self.in_ser.set(bool(high))
-        self.mcu.interrupt(0)
-
-    def pushstop(self):
-        for _ in range(5):
-            self.pushserial(True)
-
-    def pushdigit(self, digit, enable_dot):
-        assert digit >= 0 and digit < 10
-        for i in range(4):
-            self.pushserial(digit & (1 << i))
-        self.pushserial(enable_dot)
-
     def _process(self):
         super()._process()
         for seg in self.segs:
@@ -105,16 +114,16 @@ class Circuit(SimulationWithUI):
         newval = max(0, min(maxval, self.value + amount))
         self.value = newval
         while newval:
-            self.pushdigit(newval % 10, False)
+            self.serial_input.pushdigit(newval % 10, False)
             newval //= 10
-        self.pushstop()
+        self.serial_input.pushstop()
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--digits', type=int, default=8)
     args = parser.parse_args()
-    circuit = Circuit(max_digits=args.digits)
+    circuit = Circuit(max_digits=args.digits, serial_input=SerialInput())
     circuit.run()
 
 if __name__ == '__main__':
