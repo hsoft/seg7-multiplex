@@ -6,7 +6,8 @@ from icemu.mcu import ATtiny
 from icemu.shiftregisters import SN74HC595
 from icemu.seg7 import Segment7, combine_repr
 from icemu.pin import Pin
-from icemu.ui import SimulationWithUI
+from icemu.sim import Simulation
+from icemu.ui import UIScreen
 
 class SerialInput:
     def __init__(self):
@@ -29,8 +30,8 @@ class SerialInput:
         self.pushserial(enable_dot)
 
 
-class Circuit(SimulationWithUI):
-    def __init__(self, max_digits, serial_input):
+class Circuit(Simulation):
+    def __init__(self, max_digits, serial_input, with_ui=True):
         # it's possible that 8 digits is too much for the simulation to run well at
         # 10x slowdown. You might have to use a 100x slowdown... or use less digits
         super().__init__(usec_value=10)
@@ -63,13 +64,14 @@ class Circuit(SimulationWithUI):
             seg.vcc.wire_to(sr2pin)
 
 
-        self._setup_ui()
+        if with_ui:
+            self._setup_ui()
         self.mcu.run_program('seg7multiplex')
 
         self.increase_value(0)
 
     def _setup_ui(self):
-        uiscreen = self.uiscreen
+        uiscreen = UIScreen(self)
         uiscreen.add_element(
             "LED Matrix output:",
             partial(combine_repr, *self.segs[::-1])
@@ -103,11 +105,19 @@ class Circuit(SimulationWithUI):
             self.stop,
         )
         uiscreen.refresh()
+        self.uiscreen = uiscreen
 
     def _process(self):
         super()._process()
+        if hasattr(self, 'uiscreen'):
+            self.uiscreen.refresh()
         for seg in self.segs:
             seg.tick(self.TIME_RESOLUTION)
+
+    def stop(self):
+        super().stop()
+        if hasattr(self, 'uiscreen'):
+            self.uiscreen.stop()
 
     def increase_value(self, amount):
         maxval = (10**len(self.segs)) - 1
