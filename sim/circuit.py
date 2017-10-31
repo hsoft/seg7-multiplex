@@ -68,7 +68,8 @@ class Circuit(Simulation):
             self._setup_ui()
         self.mcu.run_program('seg7multiplex')
 
-        self.increase_value(0)
+        if with_ui:
+            self.increase_value(0)
 
     def _setup_ui(self):
         uiscreen = UIScreen(self)
