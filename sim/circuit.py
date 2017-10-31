@@ -38,7 +38,7 @@ class Circuit(Simulation):
         self.mcu = self.add_chip(ATtiny())
         self.sr1 = SN74HC595()
         self.sr2 = SN74HC595()
-        self.segs = [Segment7() for _ in range(max_digits)]
+        self.segs = [self.add_chip(Segment7()) for _ in range(max_digits)]
         self.value = randint(1, (10**max_digits)-1)
 
         self.serial_input = serial_input
@@ -111,8 +111,6 @@ class Circuit(Simulation):
         super()._process()
         if hasattr(self, 'uiscreen'):
             self.uiscreen.refresh()
-        for seg in self.segs:
-            seg.tick(self.TIME_RESOLUTION)
 
     def stop(self):
         super().stop()
