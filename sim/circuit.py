@@ -34,7 +34,7 @@ class Circuit(Simulation):
     def __init__(self, max_digits, serial_input, with_ui=True):
         # it's possible that 8 digits is too much for the simulation to run well at
         # 10x slowdown. You might have to use a 100x slowdown... or use less digits
-        super().__init__(usec_value=10)
+        super().__init__(usec_value=5)
         self.mcu = self.add_chip(ATtiny())
         self.sr1 = SN74HC595()
         self.sr2 = SN74HC595()
@@ -61,7 +61,7 @@ class Circuit(Simulation):
                 ['F', 'G', 'E', 'D', 'C', 'B', 'A', 'DP'],
                 self.sr1.OUTPUT_PINS,
             )
-            seg.vcc.wire_to(sr2pin)
+            seg.pin_VCC.wire_to(sr2pin)
 
 
         if with_ui:
