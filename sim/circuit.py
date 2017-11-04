@@ -8,6 +8,7 @@ from icemu.seg7 import Segment7, combine_repr
 from icemu.pin import Pin
 from icemu.sim import Simulation
 from icemu.ui import UIScreen
+from icemu.ftdi import FT232H
 
 class SerialInput:
     def __init__(self):
@@ -31,7 +32,7 @@ class SerialInput:
 
 
 class Circuit(Simulation):
-    def __init__(self, max_digits, serial_input, with_ui=True):
+    def __init__(self, max_digits, serial_input, ftdi=False, with_ui=True):
         # it's possible that 8 digits is too much for the simulation to run well at
         # 10x slowdown. You might have to use a 100x slowdown... or use less digits
         super().__init__(usec_value=5)
@@ -40,25 +41,33 @@ class Circuit(Simulation):
         self.sr2 = SN74HC595()
         self.segs = [self.add_chip(Segment7()) for _ in range(max_digits)]
         self.value = randint(1, (10**max_digits)-1)
+        if ftdi:
+            self.ftdi = FT232H()
 
         self.serial_input = serial_input
-        self.mcu.pin_B4.wire_to(self.serial_input.ser)
+        self.mcu.pin_B3.wire_to(self.serial_input.ser)
         self.mcu.pin_B0.wire_to(self.serial_input.clk)
         self.mcu.enable_interrupt_on_pin(self.mcu.pin_B0, rising=True)
 
+        if ftdi:
+            self.ftdi.pin_D1.wire_to(self.mcu.pin_B1)
+            self.ftdi.pin_D2.wire_to(self.mcu.pin_B2)
+            self.ftdi.pin_D3.wire_to(self.mcu.pin_B3)
+            self.ftdi.pin_D4.wire_to(self.mcu.pin_B4)
+
         self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B2)
-        self.sr1.pin_SER.wire_to(self.mcu.pin_B4)
+        self.sr1.pin_SER.wire_to(self.mcu.pin_B3)
         self.sr1.pin_RCLK.wire_to(self.mcu.pin_B1)
 
-        self.sr2.pin_SRCLK.wire_to(self.mcu.pin_B3)
-        self.sr2.pin_SER.wire_to(self.mcu.pin_B4)
+        self.sr2.pin_SRCLK.wire_to(self.mcu.pin_B4)
+        self.sr2.pin_SER.wire_to(self.mcu.pin_B3)
         self.sr2.pin_RCLK.wire_to(self.mcu.pin_B1)
-        self.sr2.pin_OE.wire_to(self.mcu.pin_B3)
+        self.sr2.pin_OE.wire_to(self.mcu.pin_B4)
 
         for seg, sr2pin in zip(self.segs, self.sr2.getpins(self.sr2.OUTPUT_PINS)):
             seg.wirepins(
                 self.sr1,
-                ['F', 'G', 'E', 'D', 'C', 'B', 'A', 'DP'],
+                ['A', 'D', 'E', 'G', 'F', 'DP', 'C', 'B'],
                 self.sr1.OUTPUT_PINS,
             )
             seg.pin_VCC.wire_to(sr2pin)
@@ -131,8 +140,9 @@ class Circuit(Simulation):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--digits', type=int, default=8)
+    parser.add_argument('--ftdi', action='store_true')
     args = parser.parse_args()
-    circuit = Circuit(max_digits=args.digits, serial_input=SerialInput())
+    circuit = Circuit(max_digits=args.digits, serial_input=SerialInput(), ftdi=args.ftdi)
     circuit.run()
 
 if __name__ == '__main__':

@@ -14,25 +14,24 @@
 
 
 #define SRCLK PinB2
-#define SER PinB4
+#define SER PinB3
 #define INCLK PinB0
-#define SEGCP PinB3
+#define SEGCP PinB4
 #define RCLK PinB1
 
 // Least significant bit is on Q0
-//               XABCDEGF
-#define Seg7_0 0b01111101
-#define Seg7_1 0b00110000
-#define Seg7_2 0b01101110
-#define Seg7_3 0b01111010
-#define Seg7_4 0b00110011
+//               BC.FGEDA
+#define Seg7_0 0b11010111
+#define Seg7_1 0b11000000
+#define Seg7_2 0b10001111
+#define Seg7_3 0b11001011
+#define Seg7_4 0b11011000
 #define Seg7_5 0b01011011
 #define Seg7_6 0b01011111
-#define Seg7_7 0b01110000
-#define Seg7_8 0b01111111
-#define Seg7_9 0b01111011
-#define Seg7_Dash 0b00000010
-#define Seg7_Dot 0b10000000
+#define Seg7_7 0b11000001
+#define Seg7_8 0b11011111
+#define Seg7_9 0b11011011
+#define Seg7_Dot 0b00000100
 
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
 #ifndef MAX_DIGITS
