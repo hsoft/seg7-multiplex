@@ -2,8 +2,8 @@
 #include <stdio.h>
 #ifndef SIMULATION
 #include <avr/io.h>
-#include <util/delay.h>
 #include <avr/interrupt.h>
+#include <util/atomic.h>
 #else
 #include "../common/sim.h"
 #endif
@@ -35,37 +35,150 @@
 
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
 #ifndef MAX_DIGITS
-#define MAX_DIGITS 8
+#define MAX_DIGITS 4
 #endif
 
+/* ABOUT THE COMPLEXITY OF THIS UNIT
+ *
+ * Making the choice of an ATtiny MCU greatly limits our available pins and forces us to make
+ * interesting compromises. This brought us to a design where the SER pin is shared for both
+ * SR1, SR2 *and* input data. I first started developing the "multiplexing display" part of the
+ * device with a naive algo that woked well both in simulation and real world, all was good.
+ *
+ * But then, I wanted to make the serial input work, I thought it would be easy, but no! It turns
+ * out that toggling a pin from output to input to output again in an interrupt frequently causes
+ * clash with our two SRs (who would have thunk?).
+ *
+ * In the previous naive algo, 8bit data sent to SR1 was done all in one shot, in a for loop. In
+ * between CLK low/high, there was a 1us delay. This approach pretty much guaranteed clashes when
+ * serial input would come around. I had to use another approach. This one.
+ *
+ * In a word, I "atomicised" all operations to much smaller chunks of logic at the cost of
+ * increased overall complexity.
+ *
+ * With this approach, we perform SR1 update in 16 atomic steps, each one being performed (if
+ * needed) in separate runloop iterations.
+ *
+ * Higher priority is given to the reading of serial data coming through the interrupt. This queue
+ * really has to be emptied as fast as possible because we don't have control over the speed at
+ * which data is coming in.
+ *
+ * Lower priority is given to the screen refreshing because we have ample time here. It takes 10ms
+ * without power for a segment to start showing flickering and we're significantly below that with
+ * 4 digits. We could easily support 8.
+ *
+ * An important lesson learned here: keep code in interrupt routines minimal, really barebone.
+ */
+
 static volatile bool refresh_needed;
-static volatile uint32_t display_value;
-static volatile uint8_t display_dotmask;
-static volatile uint8_t digit_count;
-static volatile uint8_t ser_input;
-static volatile uint8_t ser_input_pos;
-static volatile uint8_t ser_timeout;
+
+static uint8_t ser_input;
+static uint8_t ser_input_pos;
+static uint32_t display_value;
+static uint8_t display_dotmask;
+static uint8_t digit_count;
+static uint8_t ser_timeout;
 static uint8_t pin_to_refresh;
 
-static void toggleclk(Pin pin)
+// Here, it is assumed that 16 data element is enough to stay clear of "roundtrips", that is, data
+// writing 16 times before we have the change to read anything. The algo using this really must
+// properly prioritize the reading of this queue.
+typedef struct {
+    uint16_t data;
+    uint8_t write_index;
+    uint8_t read_index;
+} SerialQueue;
+
+static volatile SerialQueue serial_queue;
+
+// Status of an operation sending an 8-bit value to a shift register, step by step.
+// there are 16 steps, two (clk low, ser+clk high) for each bit.
+typedef struct {
+    uint8_t val;
+    uint8_t index;
+    bool going_high;
+} SRValueSender;
+
+typedef enum {
+    SRValueSenderStatus_Beginning, // We've just started and our CLK pin is low.
+    SRValueSenderStatus_Middle, // We're riding.
+    SRValueSenderStatus_Last, // We've just performed our last step. our CLK pin is high.
+    SRValueSenderStatus_Finished, // We don't have anything to send anymore.
+} SRValueSenderStatus;
+
+static SRValueSender sr1_sender;
+
+static void serial_queue_init()
 {
-    pinlow(pin);
-    _delay_us(1);
-    pinhigh(pin);
+    serial_queue.data = 0;
+    serial_queue.read_index = 0;
+    serial_queue.write_index = 0;
 }
 
-// LSB goes on q0
-static void shiftsend(uint8_t val)
+static void serial_queue_write(bool data)
 {
-    char i;
-
-    for (i=7; i>=0; i--) {
-        pinset(SER, val & (1 << i));
-        toggleclk(SRCLK);
+    if (data) {
+        serial_queue.data |= 1 << serial_queue.write_index;
+    } else {
+        serial_queue.data &= ~(1 << serial_queue.write_index);
+    }
+    serial_queue.write_index++;
+    if (serial_queue.write_index == 16) {
+        serial_queue.write_index = 0;
     }
 }
 
-static void senddigits(uint32_t val, uint8_t dotmask)
+static bool serial_queue_read(bool *data)
+{
+    if (serial_queue.read_index == serial_queue.write_index) {
+        return false;
+    }
+    *data = (serial_queue.data & (1 << serial_queue.read_index)) > 0;
+    serial_queue.read_index++;
+    if (serial_queue.read_index == 16) {
+        serial_queue.read_index = 0;
+    }
+    return true;
+}
+
+static void init_sr1_sender(uint8_t val)
+{
+    sr1_sender.val = val;
+    sr1_sender.index = 0;
+    sr1_sender.going_high = false;
+}
+
+// Shift registers usually have CLK minimum delays in the order of 100ns. This algo here assumes
+// that the overhead of calling sr1_sender_step() in a runloop results at each call is a delay
+// that is more than sufficient for this required delay.
+static SRValueSenderStatus sr1_sender_step()
+{
+    SRValueSenderStatus res;
+
+    if (sr1_sender.index < 8) {
+        res = SRValueSenderStatus_Middle;
+        if (sr1_sender.going_high) {
+            if (sr1_sender.index == 7) {
+                res = SRValueSenderStatus_Last;
+            }
+            pinset(SER, sr1_sender.val & (1 << (7 - sr1_sender.index)));
+            pinhigh(SRCLK);
+            sr1_sender.going_high = false;
+            sr1_sender.index++;
+        } else {
+            if (sr1_sender.index == 0) {
+                res = SRValueSenderStatus_Beginning;
+            }
+            pinlow(SRCLK);
+            sr1_sender.going_high = true;
+        }
+    } else {
+        res = SRValueSenderStatus_Finished;
+    }
+    return res;
+}
+
+static void send_next_digit(uint32_t val, uint8_t dotmask)
 {
     uint8_t digits[10] = {Seg7_0, Seg7_1, Seg7_2, Seg7_3, Seg7_4, Seg7_5, Seg7_6, Seg7_7, Seg7_8, Seg7_9};
     uint8_t tosend;
@@ -75,16 +188,39 @@ static void senddigits(uint32_t val, uint8_t dotmask)
     if (dotmask & (1 << pin_to_refresh)) {
         tosend |= Seg7_Dot;
     }
-    pinset(SER, pin_to_refresh == 0);
-    toggleclk(SEGCP); // SEGCP is now high, meaning that OE is disabled
-    pinlow(RCLK);
-    shiftsend(~tosend);
-    pinhigh(RCLK);
-    pinlow(SEGCP); // OE is now enabled!
-    pin_to_refresh++;
-    if (pin_to_refresh == MAX_DIGITS) {
-        pin_to_refresh = 0;
+    init_sr1_sender(~tosend);
+}
+
+// Returns whether we had anything to do at all
+static bool perform_display_step()
+{
+    bool res;
+
+    res = true;
+
+    switch (sr1_sender_step()) {
+        case SRValueSenderStatus_Beginning:
+            // SEGCP was already low.
+            pinset(SER, pin_to_refresh == 0);
+            pinhigh(SEGCP);
+            pinlow(RCLK);
+            break;
+        case SRValueSenderStatus_Middle:
+            break;
+        case SRValueSenderStatus_Last:
+            pinhigh(RCLK);
+            pinlow(SEGCP); // OE is now enabled!
+            pin_to_refresh++;
+            if (pin_to_refresh == MAX_DIGITS) {
+                pin_to_refresh = 0;
+            }
+            break;
+        case SRValueSenderStatus_Finished:
+            res = false;
+            break;
     }
+
+    return res;
 }
 
 static void push_digit(uint8_t value)
@@ -95,22 +231,18 @@ static void push_digit(uint8_t value)
         display_dotmask |= (1 << digit_count);
         value &= 0b1111;
     }
+    if (value >= 10) {
+        // Something went wrong, but what can we do about it? not much let's just abort
+        return;
+    }
 
-    amount_to_add = value * int_pow10(digit_count);
-    display_value += amount_to_add;
+    if (digit_count == 0) {
+        display_value = value;
+    } else {
+        amount_to_add = value * int_pow10(digit_count);
+        display_value += amount_to_add;
+    }
     digit_count++;
-}
-
-static void reset()
-{
-    display_value = 0;
-    display_dotmask = 0;
-    digit_count = 0;
-    ser_input_pos = 0;
-    ser_input = 0;
-    ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
-    pin_to_refresh = 0;
-    refresh_needed = false;
 }
 
 #ifndef SIMULATION
@@ -119,27 +251,12 @@ ISR(INT0_vect)
 void seg7multiplex_int0_interrupt()
 #endif
 {
-    if (ser_timeout == 0) {
-        reset();
-    }
+    bool ser;
 
     pininputmode(SER);
-    if (pinishigh(SER)) {
-        ser_input |= (1 << ser_input_pos);
-    }
+    ser = pinishigh(SER);
     pinoutputmode(SER);
-
-    ser_input_pos++;
-    if (ser_input_pos == 5) {
-        if (ser_input == 0x1f) {
-            ser_timeout = 0;
-        } else {
-            push_digit(ser_input);
-            ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
-        }
-        ser_input = 0;
-        ser_input_pos = 0;
-    }
+    serial_queue_write(ser);
 }
 
 #ifndef SIMULATION
@@ -148,13 +265,7 @@ ISR(TIMER0_COMPA_vect)
 void seg7multiplex_timer0_interrupt()
 #endif
 {
-    if (ser_timeout == 0) {
-        refresh_needed = true;
-    } else {
-        // We don't refresh while we receive serial signal, but we give ourselves a maximum number
-        // of cycle before we say "screw that, you're taking too long.
-        ser_timeout--;
-    }
+    refresh_needed = true;
 }
 
 void seg7multiplex_setup()
@@ -169,7 +280,15 @@ void seg7multiplex_setup()
     pinoutputmode(RCLK);
     pinlow(SEGCP);
 
-    reset();
+    serial_queue_init();
+    sr1_sender.index = 8; // begin in "finished" mode;
+    display_value = 0;
+    display_dotmask = 0;
+    digit_count = 0;
+    ser_input_pos = 0;
+    ser_input = 0;
+    ser_timeout = 0;
+    pin_to_refresh = 0;
     refresh_needed = true;
 
     // Set timer that controls refreshes
@@ -179,8 +298,49 @@ void seg7multiplex_setup()
 
 void seg7multiplex_loop()
 {
-    if (refresh_needed) {
-        refresh_needed = false;
-        senddigits(display_value, display_dotmask);
+    bool flag;
+
+    while (serial_queue_read(&flag)) {
+        if (flag) {
+            ser_input |= (1 << ser_input_pos);
+        }
+        ser_input_pos++;
+        // We've received data, re-init ser_timer countdown
+        ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
+        if (ser_input_pos == 5) {
+            push_digit(ser_input);
+            ser_input = 0;
+            ser_input_pos = 0;
+            if (digit_count == MAX_DIGITS) {
+                // We're done here
+                ser_timeout = 0;
+                digit_count = 0;
+            }
+        }
+    }
+    if (ser_timeout > 0) {
+        // We don't refresh while we receive serial signal, but we give ourselves a maximum number
+        // of cycle before we say "screw that, you're taking too long".
+        if (refresh_needed) {
+            refresh_needed = false;
+            ser_timeout--;
+            if (ser_timeout == 0) {
+                ser_input_pos = 0;
+                ser_input = 0;
+            }
+        }
+    } else {
+#ifndef SIMULATION
+        ATOMIC_BLOCK(ATOMIC_FORCEON)
+#endif
+        { flag = perform_display_step(); }
+        if (!flag) {
+            // Alright, we're not in the middle of something. Let's see if we have a digit to
+            // refresh...
+            if (refresh_needed) {
+                refresh_needed = false;
+                send_next_digit(display_value, display_dotmask);
+            }
+        }
     }
 }

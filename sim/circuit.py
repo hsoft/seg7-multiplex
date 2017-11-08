@@ -8,7 +8,6 @@ from icemu.seg7 import Segment7, combine_repr
 from icemu.pin import Pin
 from icemu.sim import Simulation
 from icemu.ui import UIScreen
-from icemu.ftdi import FT232H
 
 class SerialInput:
     def __init__(self):
@@ -19,10 +18,6 @@ class SerialInput:
         self.clk.setlow()
         self.ser.set(bool(high))
         self.clk.sethigh()
-
-    def pushstop(self):
-        for _ in range(5):
-            self.pushserial(True)
 
     def pushdigit(self, digit, enable_dot):
         assert digit >= 0 and digit < 10
@@ -42,6 +37,7 @@ class Circuit(Simulation):
         self.segs = [self.add_chip(Segment7()) for _ in range(max_digits)]
         self.value = randint(1, (10**max_digits)-1)
         if ftdi:
+            from icemu.ftdi import FT232H
             self.ftdi = FT232H()
 
         self.serial_input = serial_input
@@ -134,12 +130,11 @@ class Circuit(Simulation):
         while newval:
             self.serial_input.pushdigit(newval % 10, False)
             newval //= 10
-        self.serial_input.pushstop()
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--digits', type=int, default=8)
+    parser.add_argument('-d', '--digits', type=int, default=4)
     parser.add_argument('--ftdi', action='store_true')
     args = parser.parse_args()
     circuit = Circuit(max_digits=args.digits, serial_input=SerialInput(), ftdi=args.ftdi)
