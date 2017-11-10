@@ -2,8 +2,10 @@
 #include <stdio.h>
 #ifndef SIMULATION
 #include <avr/io.h>
+#include <util/atomic.h>
 #include <avr/interrupt.h>
 #include <util/atomic.h>
+#include "../common/util.h"
 #else
 #include "../common/sim.h"
 #endif
@@ -13,9 +15,9 @@
 #include "../common/intmath.h"
 
 
-#define SRCLK PinB2
+#define SRCLK PinB0
 #define SER PinB3
-#define INCLK PinB0
+#define INCLK PinB2
 #define SEGCP PinB4
 #define RCLK PinB1
 
@@ -33,7 +35,7 @@
 #define Seg7_9 0b11011011
 #define Seg7_Dot 0b00000100
 
-#define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
+#define MAX_SER_CYCLES_BEFORE_TIMEOUT 30
 #ifndef MAX_DIGITS
 #define MAX_DIGITS 4
 #endif
@@ -71,6 +73,7 @@
  */
 
 static volatile bool refresh_needed;
+static volatile bool input_mode;
 
 static uint8_t ser_input;
 static uint8_t ser_input_pos;
@@ -245,18 +248,36 @@ static void push_digit(uint8_t value)
     digit_count++;
 }
 
+static void begin_input_mode()
+{
+    input_mode = true;
+    serial_queue_init();
+    pininputmode(SER);
+    ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
+    digit_count = 0;
+    ser_input_pos = 0;
+    ser_input = 0;
+}
+
+static void end_input_mode()
+{
+    input_mode = false;
+    pinoutputmode(SER);
+    ser_timeout = 0;
+}
+
 #ifndef SIMULATION
 ISR(INT0_vect)
 #else
 void seg7multiplex_int0_interrupt()
 #endif
 {
-    bool ser;
-
-    pininputmode(SER);
-    ser = pinishigh(SER);
-    pinoutputmode(SER);
-    serial_queue_write(ser);
+    if (!input_mode) {
+        // first clocking is only to announce data. No actual data is recorded.
+        input_mode = true;
+    } else {
+        serial_queue_write(pinishigh(SER));
+    }
 }
 
 #ifndef SIMULATION
@@ -271,6 +292,10 @@ void seg7multiplex_timer0_interrupt()
 void seg7multiplex_setup()
 {
 #ifndef SIMULATION
+    sbi(MCUCR, ISC00);
+    sbi(MCUCR, ISC01);
+    // enable Pin Change Interrupts
+    sbi(GIMSK, INT0);
     sei();
 #endif
 
@@ -280,13 +305,11 @@ void seg7multiplex_setup()
     pinoutputmode(RCLK);
     pinlow(SEGCP);
 
+    input_mode = false;
     serial_queue_init();
     sr1_sender.index = 8; // begin in "finished" mode;
     display_value = 0;
     display_dotmask = 0;
-    digit_count = 0;
-    ser_input_pos = 0;
-    ser_input = 0;
     ser_timeout = 0;
     pin_to_refresh = 0;
     refresh_needed = true;
@@ -300,41 +323,39 @@ void seg7multiplex_loop()
 {
     bool flag;
 
-    while (serial_queue_read(&flag)) {
-        if (flag) {
-            ser_input |= (1 << ser_input_pos);
+    if (input_mode) {
+        if (ser_timeout == 0) {
+            // We've just started our input mode set it up
+            begin_input_mode();
         }
-        ser_input_pos++;
-        // We've received data, re-init ser_timer countdown
-        ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
-        if (ser_input_pos == 5) {
-            push_digit(ser_input);
-            ser_input = 0;
-            ser_input_pos = 0;
-            if (digit_count == MAX_DIGITS) {
-                // We're done here
-                ser_timeout = 0;
-                digit_count = 0;
+        while (serial_queue_read(&flag)) {
+            if (flag) {
+                ser_input |= (1 << ser_input_pos);
+            }
+            ser_input_pos++;
+            // We've received data, re-init ser_timer countdown
+            ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
+            if (ser_input_pos == 5) {
+                push_digit(ser_input);
+                ser_input = 0;
+                ser_input_pos = 0;
+                if (digit_count == MAX_DIGITS) {
+                    // We're done here
+                    end_input_mode();
+                }
             }
         }
-    }
-    if (ser_timeout > 0) {
         // We don't refresh while we receive serial signal, but we give ourselves a maximum number
         // of cycle before we say "screw that, you're taking too long".
         if (refresh_needed) {
             refresh_needed = false;
             ser_timeout--;
             if (ser_timeout == 0) {
-                ser_input_pos = 0;
-                ser_input = 0;
+                end_input_mode();
             }
         }
     } else {
-#ifndef SIMULATION
-        ATOMIC_BLOCK(ATOMIC_FORCEON)
-#endif
-        { flag = perform_display_step(); }
-        if (!flag) {
+        if (!perform_display_step()) {
             // Alright, we're not in the middle of something. Let's see if we have a digit to
             // refresh...
             if (refresh_needed) {

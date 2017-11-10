@@ -14,6 +14,10 @@ class SerialInput:
         self.ser = Pin('SER', output=True)
         self.clk = Pin('CLK', output=True)
 
+    def begin(self):
+        self.clk.setlow()
+        self.clk.sethigh()
+
     def pushserial(self, high):
         self.clk.setlow()
         self.ser.set(bool(high))
@@ -42,16 +46,16 @@ class Circuit(Simulation):
 
         self.serial_input = serial_input
         self.mcu.pin_B3.wire_to(self.serial_input.ser)
-        self.mcu.pin_B0.wire_to(self.serial_input.clk)
-        self.mcu.enable_interrupt_on_pin(self.mcu.pin_B0, rising=True)
+        self.mcu.pin_B2.wire_to(self.serial_input.clk)
 
         if ftdi:
-            self.ftdi.pin_D1.wire_to(self.mcu.pin_B1)
-            self.ftdi.pin_D2.wire_to(self.mcu.pin_B2)
-            self.ftdi.pin_D3.wire_to(self.mcu.pin_B3)
-            self.ftdi.pin_D4.wire_to(self.mcu.pin_B4)
+            self.ftdi.pin_D1.wire_to(self.serial_input.ser)
+            self.ftdi.pin_D0.wire_to(self.serial_input.clk)
+            # self.ftdi.pin_D2.wire_to(self.mcu.pin_B2)
+            # self.ftdi.pin_D3.wire_to(self.mcu.pin_B3)
+            # self.ftdi.pin_D4.wire_to(self.mcu.pin_B4)
 
-        self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B2)
+        self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B0)
         self.sr1.pin_SER.wire_to(self.mcu.pin_B3)
         self.sr1.pin_RCLK.wire_to(self.mcu.pin_B1)
 
@@ -127,7 +131,11 @@ class Circuit(Simulation):
         maxval = (10**len(self.segs)) - 1
         newval = max(0, min(maxval, self.value + amount))
         self.value = newval
-        while newval:
+        self.serial_input.begin()
+        while self.mcu.pin_B3.isoutput():
+            # Wait a bit, we'll receive out "PININPUTMODE" msg soon
+            self.mcu.process_msgout()
+        for _ in range(len(self.segs)):
             self.serial_input.pushdigit(newval % 10, False)
             newval //= 10
 
