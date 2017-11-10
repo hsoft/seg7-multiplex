@@ -2,7 +2,7 @@
 #include <stdio.h>
 #ifndef SIMULATION
 #include <avr/io.h>
-#include <util/atomic.h>
+#include <util/delay.h>
 #include <avr/interrupt.h>
 #include <util/atomic.h>
 #include "../common/util.h"
@@ -17,9 +17,9 @@
 
 #define SRCLK PinB0
 #define SER PinB3
-#define INCLK PinB2
 #define SEGCP PinB4
-#define RCLK PinB1
+#define INCLK PinB2
+#define INSER PinB1
 
 // Least significant bit is on Q0
 //               BC.FGEDA
@@ -206,12 +206,18 @@ static bool perform_display_step()
             // SEGCP was already low.
             pinset(SER, pin_to_refresh == 0);
             pinhigh(SEGCP);
-            pinlow(RCLK);
             break;
         case SRValueSenderStatus_Middle:
             break;
         case SRValueSenderStatus_Last:
-            pinhigh(RCLK);
+            // because RCLK is hard-wired to SRCLK on SR1, we need to perform one more
+            // SRCLK "push" at the end to push the buffer up to the output pins. Had I known
+            // about the difficulties I would have had with the "shared SER" approach I've
+            // tried and then abandoned, I would have used a buffer-less SR here to save us
+            // this wart, but now that the prototye is all soldered-up, we'll suck it up.
+            pinlow(SRCLK);
+            _delay_us(1);
+            pinhigh(SRCLK);
             pinlow(SEGCP); // OE is now enabled!
             pin_to_refresh++;
             if (pin_to_refresh == MAX_DIGITS) {
@@ -252,7 +258,6 @@ static void begin_input_mode()
 {
     input_mode = true;
     serial_queue_init();
-    pininputmode(SER);
     ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
     digit_count = 0;
     ser_input_pos = 0;
@@ -262,7 +267,6 @@ static void begin_input_mode()
 static void end_input_mode()
 {
     input_mode = false;
-    pinoutputmode(SER);
     ser_timeout = 0;
 }
 
@@ -276,7 +280,7 @@ void seg7multiplex_int0_interrupt()
         // first clocking is only to announce data. No actual data is recorded.
         input_mode = true;
     } else {
-        serial_queue_write(pinishigh(SER));
+        serial_queue_write(pinishigh(INSER));
     }
 }
 
@@ -302,7 +306,6 @@ void seg7multiplex_setup()
     pinoutputmode(SER);
     pinoutputmode(SRCLK);
     pinoutputmode(SEGCP);
-    pinoutputmode(RCLK);
     pinlow(SEGCP);
 
     input_mode = false;

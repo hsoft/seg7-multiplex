@@ -45,7 +45,7 @@ class Circuit(Simulation):
             self.ftdi = FT232H()
 
         self.serial_input = serial_input
-        self.mcu.pin_B3.wire_to(self.serial_input.ser)
+        self.mcu.pin_B1.wire_to(self.serial_input.ser)
         self.mcu.pin_B2.wire_to(self.serial_input.clk)
 
         if ftdi:
@@ -57,11 +57,11 @@ class Circuit(Simulation):
 
         self.sr1.pin_SRCLK.wire_to(self.mcu.pin_B0)
         self.sr1.pin_SER.wire_to(self.mcu.pin_B3)
-        self.sr1.pin_RCLK.wire_to(self.mcu.pin_B1)
+        self.sr1.pin_RCLK.wire_to(self.mcu.pin_B0)
 
         self.sr2.pin_SRCLK.wire_to(self.mcu.pin_B4)
         self.sr2.pin_SER.wire_to(self.mcu.pin_B3)
-        self.sr2.pin_RCLK.wire_to(self.mcu.pin_B1)
+        self.sr2.pin_RCLK.wire_to(self.mcu.pin_B0)
         self.sr2.pin_OE.wire_to(self.mcu.pin_B4)
 
         for seg, sr2pin in zip(self.segs, self.sr2.getpins(self.sr2.OUTPUT_PINS)):
@@ -132,9 +132,6 @@ class Circuit(Simulation):
         newval = max(0, min(maxval, self.value + amount))
         self.value = newval
         self.serial_input.begin()
-        while self.mcu.pin_B3.isoutput():
-            # Wait a bit, we'll receive out "PININPUTMODE" msg soon
-            self.mcu.process_msgout()
         for _ in range(len(self.segs)):
             self.serial_input.pushdigit(newval % 10, False)
             newval //= 10
