@@ -1,15 +1,14 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 #ifndef SIMULATION
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <util/atomic.h>
-#include "../common/util.h"
-#else
-#include "../common/sim.h"
 #endif
 
+#include "../common/util.h"
 #include "../common/pin.h"
 #include "../common/timer.h"
 #include "../common/intmath.h"
@@ -257,7 +256,6 @@ static void push_digit(uint8_t value)
 static void begin_input_mode()
 {
     input_mode = true;
-    serial_queue_init();
     ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
     digit_count = 0;
     ser_input_pos = 0;
@@ -268,6 +266,7 @@ static void end_input_mode()
 {
     input_mode = false;
     ser_timeout = 0;
+    serial_queue_init();
 }
 
 #ifndef SIMULATION

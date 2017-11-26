@@ -1,7 +1,6 @@
 OBJS = main.o
 OBJS += $(addprefix ../src/, seg7multiplex.o)
-OBJS += $(addprefix ../common/, sim_pin.o sim_timer.o intmath.o)
-OBJS += $(addprefix icemu/capi/, icemu.o)
+OBJS += $(addprefix ../common/, intmath.o)
 
 TO_CLEAN = $(OBJS) $(PROGNAME)
 
@@ -11,10 +10,10 @@ ALL = $(SUBMODULE_TARGETS) $(PROGNAME)
 
 include ../common.mk
 
-CFLAGS = -I. -DSIMULATION $(COMMON_CFLAGS) -c
-LDFLAGS = -I.
+CFLAGS = -I. -Iicemu/src -DSIMULATION $(COMMON_CFLAGS) -c
+LDFLAGS = -Licemu -licemu `pkg-config --libs --static ncurses`
 
 # Rules
 $(PROGNAME): $(OBJS)
-	$(CC) $(LDFLAGS) $+ -o $@
+	$(CC) $+ -o $@ $(LDFLAGS)
 
