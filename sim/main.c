@@ -11,16 +11,16 @@ void seg7multiplex_timer0_interrupt();
 void seg7multiplex_setup();
 void seg7multiplex_loop();
 
-Chip mcu;
-Chip sr1;
-Chip sr2;
-Chip segs[MAX_DIGITS];
-Pin ser;
-Pin clk;
+ICeChip mcu;
+ICeChip sr1;
+ICeChip sr2;
+ICeChip segs[MAX_DIGITS];
+ICePin ser;
+ICePin clk;
 unsigned int display_val = 1234;
 
 /* Utils */
-static Pin* getpin(PinID pinid)
+static ICePin* getpin(PinID pinid)
 {
     switch (pinid) {
         case PinB0: return mcu.pins.pins[0];
@@ -151,7 +151,7 @@ int main()
 
     seg7multiplex_setup();
     icemu_mcu_add_interrupt(
-        &mcu, getpin(PinB2), INTERRUPT_ON_RISING, seg7multiplex_int0_interrupt);
+        &mcu, getpin(PinB2), ICE_INTERRUPT_ON_RISING, seg7multiplex_int0_interrupt);
     icemu_sim_init(50, seg7multiplex_loop);
     icemu_sim_add_action('+', "(+) Increase Value", increase_value);
     icemu_sim_add_action('-', "(-) Decrease Value", decrease_value);
