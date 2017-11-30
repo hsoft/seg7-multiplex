@@ -1,4 +1,4 @@
-OBJS = main.o
+OBJS = main.o circuit.o
 OBJS += $(addprefix ../src/, seg7multiplex.o)
 OBJS += $(addprefix ../common/, intmath.o)
 

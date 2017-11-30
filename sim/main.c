@@ -5,29 +5,27 @@
 #include "../common/timer.h"
 #include "../common/intmath.h"
 #include "icemu.h"
+#include "circuit.h"
 
 void seg7multiplex_int0_interrupt();
 void seg7multiplex_timer0_interrupt();
 void seg7multiplex_setup();
 void seg7multiplex_loop();
 
-ICeChip mcu;
-ICeChip sr1;
-ICeChip sr2;
-ICeChip segs[MAX_DIGITS];
-ICePin ser;
-ICePin clk;
+static Seg7Multiplex circuit;
+static ICePin ser;
+static ICePin clk;
 unsigned int display_val = 1234;
 
 /* Utils */
 static ICePin* getpin(PinID pinid)
 {
     switch (pinid) {
-        case PinB0: return mcu.pins.pins[0];
-        case PinB1: return mcu.pins.pins[1];
-        case PinB2: return mcu.pins.pins[2];
-        case PinB3: return mcu.pins.pins[3];
-        case PinB4: return mcu.pins.pins[4];
+        case PinB0: return circuit.PB0;
+        case PinB1: return circuit.PB1;
+        case PinB2: return circuit.PB2;
+        case PinB3: return circuit.PB3;
+        case PinB4: return circuit.PB4;
         default: return NULL;
     }
 }
@@ -48,7 +46,6 @@ static void push_digit(uint8_t digit, bool enable_dot)
     push_serial(digit & (1 << 2));
     push_serial(digit & (1 << 3));
     push_serial(enable_dot);
-    seg7multiplex_loop(); // let the runloop breathe a little bit.
 }
 
 static void push_number(uint32_t val)
@@ -60,6 +57,8 @@ static void push_number(uint32_t val)
 
     for (i = 0; i < MAX_DIGITS; i++) {
         push_digit((val / int_pow10(MAX_DIGITS - i - 1)) % 10, false);
+        // let the runloop breathe a little
+        seg7multiplex_loop();
     }
 }
 
@@ -91,7 +90,7 @@ void pinoutputmode(PinID pinid)
 
 bool set_timer0_target(unsigned long usecs)
 {
-    icemu_mcu_add_timer(&mcu, usecs, seg7multiplex_timer0_interrupt);
+    icemu_mcu_add_timer(&circuit.mcu, usecs, seg7multiplex_timer0_interrupt);
     return true;
 }
 
@@ -114,53 +113,24 @@ void decrease_value()
 
 int main()
 {
-    int i, j;
-    char * segorder[] = {"A", "D", "E", "G", "F", "DP", "C", "B"};
-    ShiftRegister *sr1_lu;
-    ShiftRegister *sr2_lu;
+    int i;
 
-    icemu_ATtiny_init(&mcu);
-    icemu_mcu_set_runloop(&mcu, seg7multiplex_loop, 50);
-    icemu_SN74HC595_init(&sr1);
-    sr1_lu = (ShiftRegister *)sr1.logical_unit;
-    icemu_SN74HC595_init(&sr2);
-    sr2_lu = (ShiftRegister *)sr2.logical_unit;
-    for (i = 0; i < MAX_DIGITS; i++) {
-        icemu_seg7_init(&segs[i]);
-    }
     icemu_pin_init(&ser, NULL, "SER", true);
     icemu_pin_init(&clk, NULL, "CLK", true);
 
-    icemu_pin_wireto(getpin(PinB1), &ser);
-    icemu_pin_wireto(getpin(PinB2), &clk);
-
-    icemu_pin_wireto(getpin(PinB0), icemu_chip_getpin(&sr1, "SRCLK"));
-    icemu_pin_wireto(getpin(PinB3), icemu_chip_getpin(&sr1, "SER"));
-    icemu_pin_wireto(getpin(PinB0), icemu_chip_getpin(&sr1, "RCLK"));
-
-    icemu_pin_wireto(getpin(PinB4), icemu_chip_getpin(&sr2, "SRCLK"));
-    icemu_pin_wireto(getpin(PinB3), icemu_chip_getpin(&sr2, "SER"));
-    icemu_pin_wireto(getpin(PinB0), icemu_chip_getpin(&sr2, "RCLK"));
-    icemu_pin_wireto(getpin(PinB4), icemu_chip_getpin(&sr2, "OE"));
-
-    for (i = 0; i < MAX_DIGITS; i++) {
-        for (j = 0; j < 8; j++) {
-            icemu_pin_wireto(sr1_lu->outputs.pins[j], icemu_chip_getpin(&segs[i], segorder[j]));
-        }
-        icemu_pin_wireto(icemu_ledmatrix_vcc(&segs[i]), sr2_lu->outputs.pins[i]);
-    }
+    seg7multiplex_circuit_init(&circuit, &ser, &clk);
 
     seg7multiplex_setup();
     icemu_mcu_add_interrupt(
-        &mcu, getpin(PinB2), ICE_INTERRUPT_ON_RISING, seg7multiplex_int0_interrupt);
+        &circuit.mcu, getpin(PinB2), ICE_INTERRUPT_ON_RISING, seg7multiplex_int0_interrupt);
     icemu_sim_init();
     icemu_sim_add_action('+', "(+) Increase Value", increase_value);
     icemu_sim_add_action('-', "(-) Decrease Value", decrease_value);
-    icemu_ui_add_element("MCU", &mcu);
-    icemu_ui_add_element("SR1", &sr1);
-    icemu_ui_add_element("SR2", &sr2);
+    icemu_ui_add_element("MCU", &circuit.mcu);
+    icemu_ui_add_element("SR1", &circuit.sr1);
+    icemu_ui_add_element("SR2", &circuit.sr2);
     for (i = 0; i < MAX_DIGITS; i++) {
-        icemu_ui_add_element("", &segs[i]);
+        icemu_ui_add_element("", &circuit.segs[i]);
     }
     push_number(display_val);
     icemu_sim_run();
