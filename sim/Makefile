@@ -15,5 +15,6 @@ LDFLAGS = -Licemu -licemu `pkg-config --libs --static ncurses`
 
 # Rules
 $(PROGNAME): $(OBJS)
+	$(MAKE) -C icemu clean all
 	$(CC) $+ -o $@ $(LDFLAGS)
 

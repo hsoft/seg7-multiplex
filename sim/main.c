@@ -120,6 +120,7 @@ int main()
     ShiftRegister *sr2_lu;
 
     icemu_ATtiny_init(&mcu);
+    icemu_mcu_set_runloop(&mcu, seg7multiplex_loop, 50);
     icemu_SN74HC595_init(&sr1);
     sr1_lu = (ShiftRegister *)sr1.logical_unit;
     icemu_SN74HC595_init(&sr2);
@@ -152,15 +153,13 @@ int main()
     seg7multiplex_setup();
     icemu_mcu_add_interrupt(
         &mcu, getpin(PinB2), ICE_INTERRUPT_ON_RISING, seg7multiplex_int0_interrupt);
-    icemu_sim_init(50, seg7multiplex_loop);
+    icemu_sim_init();
     icemu_sim_add_action('+', "(+) Increase Value", increase_value);
     icemu_sim_add_action('-', "(-) Decrease Value", decrease_value);
-    icemu_sim_add_chip(&mcu);
     icemu_ui_add_element("MCU", &mcu);
     icemu_ui_add_element("SR1", &sr1);
     icemu_ui_add_element("SR2", &sr2);
     for (i = 0; i < MAX_DIGITS; i++) {
-        icemu_sim_add_chip(&segs[i]);
         icemu_ui_add_element("", &segs[i]);
     }
     push_number(display_val);
