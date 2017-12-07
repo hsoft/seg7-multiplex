@@ -15,6 +15,7 @@ void seg7multiplex_loop();
 static Seg7Multiplex circuit;
 static ICePin ser;
 static ICePin clk;
+static ICeChip ftdi;
 unsigned int display_val = 1234;
 
 /* Utils */
@@ -34,7 +35,14 @@ static void push_serial(bool high)
 {
     icemu_pin_set(&clk, false);
     icemu_pin_set(&ser, high);
+    /* These 20us delays are necessary when running in FTDI mode with the prototype connected
+     * to our two serial pins. Without those delays, CLK toggles too fast for the MCU. 20us seems
+     * rather high to me, I'm not so sure why it's so high, but then again, it's the threshold that
+     * works without sending corrupt digits. 40us per bit means 200us per digit. Fair enough.
+     */
+    icemu_sim_delay(20);
     icemu_pin_set(&clk, true);
+    icemu_sim_delay(20);
 }
 
 static void push_digit(uint8_t digit, bool enable_dot)
@@ -114,11 +122,18 @@ void decrease_value()
 int main()
 {
     int i;
+    bool has_ftdi;
 
     icemu_pin_init(&ser, NULL, "SER", true);
     icemu_pin_init(&clk, NULL, "CLK", true);
 
     seg7multiplex_circuit_init(&circuit, &ser, &clk);
+
+    has_ftdi = icemu_FT232H_init(&ftdi);
+    if (has_ftdi) {
+        icemu_pin_wireto(&ser, icemu_chip_getpin(&ftdi, "D0"));
+        icemu_pin_wireto(&clk, icemu_chip_getpin(&ftdi, "D1"));
+    }
 
     seg7multiplex_setup();
     icemu_mcu_add_interrupt(
@@ -129,6 +144,9 @@ int main()
     icemu_ui_add_element("MCU", &circuit.mcu);
     icemu_ui_add_element("SR1", &circuit.sr1);
     icemu_ui_add_element("SR2", &circuit.sr2);
+    if (has_ftdi) {
+        icemu_ui_add_element("FTDI", &ftdi);
+    }
     for (i = 0; i < MAX_DIGITS; i++) {
         icemu_ui_add_element("", &circuit.segs[i]);
     }

@@ -10,7 +10,7 @@ void seg7multiplex_circuit_init(Seg7Multiplex *circuit, ICePin *ser, ICePin *clk
     ShiftRegister *sr2_lu;
 
     icemu_ATtiny_init(&circuit->mcu);
-    icemu_mcu_set_runloop(&circuit->mcu, seg7multiplex_loop, 50);
+    icemu_mcu_set_runloop(&circuit->mcu, seg7multiplex_loop, 100);
     circuit->PB0 = circuit->mcu.pins.pins[0];
     circuit->PB1 = circuit->mcu.pins.pins[1];
     circuit->PB2 = circuit->mcu.pins.pins[2];

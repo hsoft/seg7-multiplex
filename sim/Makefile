@@ -11,7 +11,7 @@ ALL = $(SUBMODULE_TARGETS) $(PROGNAME)
 include ../common.mk
 
 CFLAGS = -I. -Iicemu/src -DSIMULATION $(COMMON_CFLAGS) -c
-LDFLAGS = -Licemu -licemu `pkg-config --libs --static ncurses`
+LDFLAGS = -Licemu -licemu `pkg-config --libs --static ncurses libftdi1`
 
 # Rules
 $(PROGNAME): $(OBJS)
