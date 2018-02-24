@@ -34,7 +34,7 @@
 #define Seg7_9 0b11011011
 #define Seg7_Dot 0b00000100
 
-#define MAX_SER_CYCLES_BEFORE_TIMEOUT 30
+#define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
 #ifndef MAX_DIGITS
 #define MAX_DIGITS 4
 #endif
@@ -295,6 +295,7 @@ void seg7multiplex_timer0_interrupt()
 void seg7multiplex_setup()
 {
 #ifndef SIMULATION
+    // generate interrupt on rising edge of INT0
     sbi(MCUCR, ISC00);
     sbi(MCUCR, ISC01);
     // enable Pin Change Interrupts
@@ -344,6 +345,10 @@ void seg7multiplex_loop()
                 if (digit_count == MAX_DIGITS) {
                     // We're done here
                     end_input_mode();
+                    // Return now so we don't execute the ser_timeout code
+                    // below. Doing so after end_input_mode() makes
+                    // ser_timeout underflow to 0xff.
+                    return;
                 }
             }
         }

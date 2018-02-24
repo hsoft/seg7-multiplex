@@ -1,5 +1,5 @@
 PROGNAME = ftdiclient
-OBJS = ftdiclient.o ../common/intmath.c
+OBJS = ftdiclient.o ../common/intmath.o
 
 TO_CLEAN = $(OBJS) $(PROGNAME)
 

@@ -10,6 +10,7 @@
 #define CLK_PIN 1
 
 #define MAX_DIGITS 4
+#define SLEEPDELAY 20
 
 struct ftdi_context *g_ftdi = NULL;
 
@@ -31,9 +32,9 @@ static void push_serial(bool high)
 {
     pinset(CLK_PIN, false);
     pinset(SER_PIN, high);
-    usleep(20);
+    usleep(SLEEPDELAY);
     pinset(CLK_PIN, true);
-    usleep(20);
+    usleep(SLEEPDELAY);
 }
 
 static void push_digit(uint8_t digit, bool enable_dot)
@@ -56,7 +57,7 @@ static void push_number(uint32_t val)
 
     for (i = 0; i < MAX_DIGITS; i++) {
         push_digit((val / int_pow10(MAX_DIGITS - i - 1)) % 10, false);
-        usleep(20);
+        usleep(SLEEPDELAY);
     }
 }
 
