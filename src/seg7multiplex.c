@@ -258,6 +258,8 @@ static void begin_input_mode()
     input_mode = true;
     ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
     digit_count = 0;
+    display_value = 0;
+    display_dotmask = 0;
     ser_input_pos = 0;
     ser_input = 0;
 }
@@ -359,6 +361,9 @@ void seg7multiplex_loop()
             ser_timeout--;
             if (ser_timeout == 0) {
                 end_input_mode();
+                // highlight the leftmost dot to indicate error in the previous
+                // reception.
+                display_dotmask = 0x1;
             }
         }
     } else {
