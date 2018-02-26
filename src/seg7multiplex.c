@@ -32,7 +32,7 @@
 #define Seg7_7 0b11000001
 #define Seg7_8 0b11011111
 #define Seg7_9 0b11011011
-#define Seg7_Dot 0b00000100
+#define Seg7_Dot 0b00100000
 
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
 #ifndef MAX_DIGITS
