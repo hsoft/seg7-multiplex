@@ -40,24 +40,94 @@ when they change.
 
 ## Prototype
 
-I have a prototype that works rather well. There's a slight flicker when the
-value changes but when it doesn't the display is much less flickery.
+### v1
 
-The MCU is an `ATtiny45` and runs at `1MHZ`. It's plenty fast, to do its
-refreshing job while receving serial data (but the code had to be carefully
-crafted to minimize the maximum possible time of a runloop and make sure that
-display refreshes didn't interfer with serial input triggers), but that serial
-data clocking speed has to be slow enough. My thinkering made me place that
-speed at `100us` between `CLK` pin changes.
+My first prototype was using two shift registers to multiplex my 7-segments
+digits. It worked rather well but my craftmanship was lacking. Soldering wasn't
+good and the board was too cramped. I also forgot (or didn't know about) to add
+decoupling capacitors next to my ICs and I think that this is why that prototype
+wasn't working perfectly (it would receive the wrong data through serial and
+would even sometimes have a corrupt display (missing/extra segment) about 10% of
+the time). Also, to get that figure to 10% from 50%, I had to lower my serial
+clock timing to 100us (a minimum of 100us between serial clocks). That seems a
+bit high to me. Something is fishy.
 
-`100us` seems quite high to me though, but as I lower that delay, my rate of
-serial errors goes up. I'll have to investigate.
+As a software developer, I'm used to be on solid grounds. If the code is
+logical, generally, things work. Here I have to learn to deal with timing and
+power fluctuation issues. These present interesting challenges.
 
-When running under `5V` it draws between `5.5ma` and `5.8ma` and its consumption
-doesn't seem to be linked to whether it receives serial data. The LED seem to be
-using the most of the current because when I measured the `ATtiny45` chip alone
-I got `0.6mA`. When running on 2 AA batteries (`2.4V`), current drops to `2.8mA`
-(but the LED are significantly dimmer).
+Because my board was too cramped, I needed to make a new prototype altogether
+(with decoupling capacitors this time) and I thought that if I was going to do
+that, I might as well try another design, that is, my v2.
+
+You can see the code for this v1 in the `v1` branch of this repo. I have no
+KiCAD schema though. Never bothered. Will do for v2 though.
+
+### v2
+
+Although I think that my design for v1 was globally sound, I think in
+retrospective that the MCU does too many things. The less things the MCU does,
+the more logic you offload to ICs, the more robust your design is going to be (I
+think). After all, people designing ICs went through much more trouble to make
+sure it worked well than I did for my prototype...
+
+So that's why I'm trying a new multiplex design here, with 3 ICs:
+
+1. 7-segment decoder hooked to my displays
+2. binary counter hooked to the decoder
+3. shift register hooked to displays' `VCC` (and `DP`)
+
+With the decoder + counter, sending a particular digit mask to the display is
+only a matter of clocking the counter, so it's only two pin changes. That is
+much much less than the number of pins we have to change to send a particular
+digit mask into a shift register.
+
+I could use a decade counter to only cycle through the first 10 glyphs of my
+decoder's 16, but as I looked as extra glyphs, I realized (I really wasn't sure
+what they were supposed to be for initially) that they're probably optimized for
+multiplexing, that is, that the 5 extra masks (last one is blank) are masks that
+"fit" multiple digits. For example, the 11th mask is the lower half of `5` which
+also fits 6 and 8.
+
+Therefore, when cycling through masks, you can enable `VCC` not only for exact
+digit matches but also partial matches and, in the end, you've refreshed your
+multiplexed displays properly. I'm thinking that 1ms per cycle should be good
+enough to keep us under the 10ms threshold (at which point the eye starts to see
+a flicker) even if we cycle through 16 digit masks.
+
+One problem though is that the 7-segments decoder doesn't handle `DP`, which I'd
+like to support. This is why I'm thinking of bringing down (theoretical) digit
+support from 8 to 4 and hook 4 pins of my shift register directly to my `DP`
+pins. This way, I'll handle `DP` status completely outside of the multiplexing
+process.
+
+With the `ATtiny45`, I only have 3 free output pins (2 pins are used for serial
+communication). That requires creativity to handle all my ICs with only 3 pins,
+but I think I have a good idea:
+
+1. pins 1 and 2 hooked to my shift register
+2. pin 3 to my binary counter
+3. pin 3 also hooked to my shift register's `OE` pin (output enable).
+
+I need to control `OE` because there's always going to be a slight window of
+time during which the decoder cycled and the shift register hasn't updated `VCC`
+pin yet. If I let `OE` on, then my displays are going to have "ghost" branches.
+The pin clocking the binary counter is going to be in position to enable `OE`
+most of the time and right when we will toggle the binary counter clock, `OE`
+will become disabled. Then, I'll update the shift register and toggle `OE` back
+(which will not trigger a binary counter update since it takes a full on/off
+cycle to trigger). I haven't looked yet whether I'm going to be needing an
+inverter for this. If yes, I'll probably look for a shift register that allows
+me to do that without an inverter (an extra IC just for this seem a bit much).
+
+### Status
+
+1. ~~Plan the thing out in the readme~~
+2. Draw a KiCAD schema
+3. Code a `icemu` simulation
+4. Solder a prototype
+5. Iron out issues
+6. Order a PCB?
 
 ## Simulation
 
