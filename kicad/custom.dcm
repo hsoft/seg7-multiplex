@@ -1,0 +1,12 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP SN74HC161
+D 4 bit synchronous binary counter
+$ENDCMP
+#
+$CMP SN74HC595
+D 8 bits serial in // out Shift Register 3 State Out
+K HCMOS SR 3State
+$ENDCMP
+#
+#End Doc Library

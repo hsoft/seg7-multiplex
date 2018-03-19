@@ -123,7 +123,7 @@ me to do that without an inverter (an extra IC just for this seem a bit much).
 ### Status
 
 1. ~~Plan the thing out in the readme~~
-2. Draw a KiCAD schema
+2. ~~Draw a KiCAD schema~~
 3. Code a `icemu` simulation
 4. Solder a prototype
 5. Iron out issues
