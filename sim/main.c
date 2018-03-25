@@ -150,7 +150,7 @@ int main()
     icemu_sim_init();
     icemu_sim_add_action('+', "(+) Increase Value", increase_value);
     icemu_sim_add_action('-', "(-) Decrease Value", decrease_value);
-    icemu_sim_add_action('d', "Cycle dotmask", cycle_dotmask);
+    icemu_sim_add_action('d', "Cycle (d)otmask", cycle_dotmask);
     icemu_ui_add_element("MCU", &circuit.mcu);
     icemu_ui_add_element("SR", &circuit.sr);
     icemu_ui_add_element("CNT", &circuit.cnt);
