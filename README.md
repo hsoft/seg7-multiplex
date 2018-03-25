@@ -135,5 +135,6 @@ This project can be simulated on a desktop computer! The simulation uses
 [icemu][icemu]. To run it, `cd` into `sim` and run `make`, then
 `./seg7multiplex`. You'll get something like this:
 
-[![asciinema](https://asciinema.org/a/WsYhXc1VcgfmkKZ8SAT18xYjv.png)](https://asciinema.org/a/WsYhXc1VcgfmkKZ8SAT18xYjv)
+[![asciinema](https://asciinema.org/a/RxFAJOHpEg3R0Vu5M7mUI73sD.png)](https://asciinema.org/a/RxFAJOHpEg3R0Vu5M7mUI73sD)
+
 [icemu]: https://github.com/hsoft/icemu
