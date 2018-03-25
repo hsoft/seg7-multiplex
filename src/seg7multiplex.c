@@ -207,6 +207,8 @@ static uint8_t glyph_match_mask(uint16_t val, uint8_t glyph)
 
 static void send_next_glyph()
 {
+    uint8_t tosend;
+
     current_glyph++;
     if (current_glyph == 0xf) {
         // 15 is the blank character. There's nothing interesting to do with it,
@@ -217,7 +219,9 @@ static void send_next_glyph()
         current_glyph = 0;
     }
     pinhigh(CNT);
-    init_sr_sender(glyph_match_mask(display_value, current_glyph));
+    tosend = glyph_match_mask(display_value, current_glyph);
+    tosend |= (~display_dotmask << 4);
+    init_sr_sender(tosend);
 }
 
 // Returns whether we had anything to do at all

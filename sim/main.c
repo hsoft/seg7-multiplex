@@ -17,6 +17,7 @@ static ICePin ser;
 static ICePin clk;
 static ICeChip ftdi;
 unsigned int display_val = 1234;
+unsigned int display_dotmask = 0;
 
 /* Utils */
 static ICePin* getpin(PinID pinid)
@@ -56,15 +57,17 @@ static void push_digit(uint8_t digit, bool enable_dot)
     push_serial(enable_dot);
 }
 
-static void push_number(uint32_t val)
+static void push_number(uint32_t val, uint8_t display_dotmask)
 {
     int i;
+    bool hasdot;
 
     // we start with an empty CLK to begin;
     push_serial(false);
 
-    for (i = 0; i < MAX_DIGITS; i++) {
-        push_digit((val / int_pow10(MAX_DIGITS - i - 1)) % 10, false);
+    for (i = 0; i < DIGITS; i++) {
+        hasdot = display_dotmask & (1 << i);
+        push_digit((val / int_pow10(DIGITS - i - 1)) % 10, hasdot);
         // let the runloop breathe a little
         seg7multiplex_loop();
     }
@@ -110,13 +113,19 @@ void set_timer0_mode(TIMER_MODE mode)
 void increase_value()
 {
     display_val++;
-    push_number(display_val);
+    push_number(display_val, display_dotmask);
 }
 
 void decrease_value()
 {
     display_val--;
-    push_number(display_val);
+    push_number(display_val, display_dotmask);
+}
+
+void cycle_dotmask()
+{
+    display_dotmask++;
+    push_number(display_val, display_dotmask);
 }
 
 int main()
@@ -141,6 +150,7 @@ int main()
     icemu_sim_init();
     icemu_sim_add_action('+', "(+) Increase Value", increase_value);
     icemu_sim_add_action('-', "(-) Decrease Value", decrease_value);
+    icemu_sim_add_action('d', "Cycle dotmask", cycle_dotmask);
     icemu_ui_add_element("MCU", &circuit.mcu);
     icemu_ui_add_element("SR", &circuit.sr);
     icemu_ui_add_element("CNT", &circuit.cnt);
@@ -148,10 +158,10 @@ int main()
     if (has_ftdi) {
         icemu_ui_add_element("FTDI", &ftdi);
     }
-    for (i = 0; i < MAX_DIGITS; i++) {
+    for (i = 0; i < DIGITS; i++) {
         icemu_ui_add_element("", &circuit.segs[i]);
     }
-    push_number(display_val);
+    push_number(display_val, display_dotmask);
     icemu_sim_run();
     return 0;
 }
