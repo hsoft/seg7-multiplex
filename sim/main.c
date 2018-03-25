@@ -142,8 +142,9 @@ int main()
     icemu_sim_add_action('+', "(+) Increase Value", increase_value);
     icemu_sim_add_action('-', "(-) Decrease Value", decrease_value);
     icemu_ui_add_element("MCU", &circuit.mcu);
-    icemu_ui_add_element("SR1", &circuit.sr1);
-    icemu_ui_add_element("SR2", &circuit.sr2);
+    icemu_ui_add_element("SR", &circuit.sr);
+    icemu_ui_add_element("CNT", &circuit.cnt);
+    icemu_ui_add_element("DEC", &circuit.dec);
     if (has_ftdi) {
         icemu_ui_add_element("FTDI", &ftdi);
     }

@@ -14,29 +14,15 @@
 #include "../common/intmath.h"
 
 
-#define SRCLK PinB0
-#define SER PinB3
-#define SEGCP PinB4
+#define SRCLK PinB3
+#define SER PinB4
+#define CNT PinB0
 #define INCLK PinB2
 #define INSER PinB1
 
-// Least significant bit is on Q0
-//               BC.FGEDA
-#define Seg7_0 0b11010111
-#define Seg7_1 0b11000000
-#define Seg7_2 0b10001111
-#define Seg7_3 0b11001011
-#define Seg7_4 0b11011000
-#define Seg7_5 0b01011011
-#define Seg7_6 0b01011111
-#define Seg7_7 0b11000001
-#define Seg7_8 0b11011111
-#define Seg7_9 0b11011011
-#define Seg7_Dot 0b00100000
-
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
-#ifndef MAX_DIGITS
-#define MAX_DIGITS 4
+#ifndef DIGITS
+#define DIGITS 4
 #endif
 
 /* ABOUT THE COMPLEXITY OF THIS UNIT
@@ -80,7 +66,7 @@ static uint32_t display_value;
 static uint8_t display_dotmask;
 static uint8_t digit_count;
 static uint8_t ser_timeout;
-static uint8_t pin_to_refresh;
+static uint8_t current_glyph;
 
 // Here, it is assumed that 16 data element is enough to stay clear of "roundtrips", that is, data
 // writing 16 times before we have the change to read anything. The algo using this really must
@@ -108,7 +94,7 @@ typedef enum {
     SRValueSenderStatus_Finished, // We don't have anything to send anymore.
 } SRValueSenderStatus;
 
-static SRValueSender sr1_sender;
+static SRValueSender sr_sender;
 
 static void serial_queue_init()
 {
@@ -143,36 +129,36 @@ static bool serial_queue_read(bool *data)
     return true;
 }
 
-static void init_sr1_sender(uint8_t val)
+static void init_sr_sender(uint8_t val)
 {
-    sr1_sender.val = val;
-    sr1_sender.index = 0;
-    sr1_sender.going_high = false;
+    sr_sender.val = val;
+    sr_sender.index = 0;
+    sr_sender.going_high = false;
 }
 
 // Shift registers usually have CLK minimum delays in the order of 100ns. This algo here assumes
-// that the overhead of calling sr1_sender_step() in a runloop results at each call is a delay
+// that the overhead of calling sr_sender_step() in a runloop results at each call is a delay
 // that is more than sufficient for this required delay.
-static SRValueSenderStatus sr1_sender_step()
+static SRValueSenderStatus sr_sender_step()
 {
     SRValueSenderStatus res;
 
-    if (sr1_sender.index < 8) {
+    if (sr_sender.index < 8) {
         res = SRValueSenderStatus_Middle;
-        if (sr1_sender.going_high) {
-            if (sr1_sender.index == 7) {
+        if (sr_sender.going_high) {
+            if (sr_sender.index == 7) {
                 res = SRValueSenderStatus_Last;
             }
-            pinset(SER, sr1_sender.val & (1 << (7 - sr1_sender.index)));
+            pinset(SER, sr_sender.val & (1 << (7 - sr_sender.index)));
             pinhigh(SRCLK);
-            sr1_sender.going_high = false;
-            sr1_sender.index++;
+            sr_sender.going_high = false;
+            sr_sender.index++;
         } else {
-            if (sr1_sender.index == 0) {
+            if (sr_sender.index == 0) {
                 res = SRValueSenderStatus_Beginning;
             }
             pinlow(SRCLK);
-            sr1_sender.going_high = true;
+            sr_sender.going_high = true;
         }
     } else {
         res = SRValueSenderStatus_Finished;
@@ -180,17 +166,58 @@ static SRValueSenderStatus sr1_sender_step()
     return res;
 }
 
-static void send_next_digit(uint32_t val, uint8_t dotmask)
+static bool glyph_matches(uint8_t glyph, uint8_t digit)
 {
-    uint8_t digits[10] = {Seg7_0, Seg7_1, Seg7_2, Seg7_3, Seg7_4, Seg7_5, Seg7_6, Seg7_7, Seg7_8, Seg7_9};
-    uint8_t tosend;
-
-    val /= int_pow10(pin_to_refresh);
-    tosend = digits[val % 10];
-    if (dotmask & (1 << pin_to_refresh)) {
-        tosend |= Seg7_Dot;
+    if ((glyph < 10) && (glyph == digit)) {
+        return true;
     }
-    init_sr1_sender(~tosend);
+    if (glyph > 15) {
+        return false;
+    }
+    if (digit == 8) {
+        return true;
+    }
+    switch (glyph) {
+        case 1: return (digit == 0) || (digit == 3) || (digit == 4) || (digit == 7) || (digit == 9);
+        case 5: return (digit == 6);
+        case 7: return (digit == 0) || (digit == 3) || (digit == 9);
+        case 10: return (digit == 2) || (digit == 6);
+        case 11: return (digit == 3) || (digit == 5) || (digit == 6);
+        case 12: return (digit == 4) || (digit == 9);
+        case 13: return (digit == 5) || (digit == 6) || (digit == 9);
+        case 14: return (digit == 6);
+    }
+    return false;
+}
+
+static uint8_t glyph_match_mask(uint16_t val, uint8_t glyph)
+{
+    uint8_t res = 0;
+    uint8_t i;
+
+    for (i=0; i<DIGITS; i++) {
+        if (glyph_matches(glyph, val % 10)) {
+            res |= (1 << i);
+        }
+        val /= 10;
+    }
+
+    return res;
+}
+
+static void send_next_glyph()
+{
+    current_glyph++;
+    if (current_glyph == 0xf) {
+        // 15 is the blank character. There's nothing interesting to do with it,
+        // skip it.
+        pinhigh(CNT);
+        _delay_us(1);
+        pinlow(CNT);
+        current_glyph = 0;
+    }
+    pinhigh(CNT);
+    init_sr_sender(glyph_match_mask(display_value, current_glyph));
 }
 
 // Returns whether we had anything to do at all
@@ -200,30 +227,23 @@ static bool perform_display_step()
 
     res = true;
 
-    switch (sr1_sender_step()) {
+    switch (sr_sender_step()) {
         case SRValueSenderStatus_Beginning:
-            // SEGCP was already low.
-            pinset(SER, pin_to_refresh == 0);
-            pinhigh(SEGCP);
             break;
         case SRValueSenderStatus_Middle:
             break;
         case SRValueSenderStatus_Last:
-            // because RCLK is hard-wired to SRCLK on SR1, we need to perform one more
+            // because RCLK is hard-wired to SRCLK on SR, we need to perform one more
             // SRCLK "push" at the end to push the buffer up to the output pins. Had I known
             // about the difficulties I would have had with the "shared SER" approach I've
             // tried and then abandoned, I would have used a buffer-less SR here to save us
             // this wart, but now that the prototye is all soldered-up, we'll suck it up.
-            pinlow(SRCLK);
-            _delay_us(1);
-            pinhigh(SRCLK);
-            pinlow(SEGCP); // OE is now enabled!
-            pin_to_refresh++;
-            if (pin_to_refresh == MAX_DIGITS) {
-                pin_to_refresh = 0;
-            }
+            /*pinlow(SRCLK); */
+            /*_delay_us(1);  */
+            /*pinhigh(SRCLK);*/
             break;
         case SRValueSenderStatus_Finished:
+            pinlow(CNT);
             res = false;
             break;
     }
@@ -307,20 +327,19 @@ void seg7multiplex_setup()
 
     pinoutputmode(SER);
     pinoutputmode(SRCLK);
-    pinoutputmode(SEGCP);
-    pinlow(SEGCP);
+    pinoutputmode(CNT);
 
     input_mode = false;
     serial_queue_init();
-    sr1_sender.index = 8; // begin in "finished" mode;
+    sr_sender.index = 8; // begin in "finished" mode;
     display_value = 0;
     display_dotmask = 0;
     ser_timeout = 0;
-    pin_to_refresh = 0;
+    current_glyph = 0;
     refresh_needed = true;
 
     // Set timer that controls refreshes
-    set_timer0_target(1000); // every 1 ms
+    set_timer0_target(600); // every 600 us
     set_timer0_mode(TIMER_MODE_INTERRUPT);
 }
 
@@ -344,7 +363,7 @@ void seg7multiplex_loop()
                 push_digit(ser_input);
                 ser_input = 0;
                 ser_input_pos = 0;
-                if (digit_count == MAX_DIGITS) {
+                if (digit_count == DIGITS) {
                     // We're done here
                     end_input_mode();
                     // Return now so we don't execute the ser_timeout code
@@ -372,7 +391,7 @@ void seg7multiplex_loop()
             // refresh...
             if (refresh_needed) {
                 refresh_needed = false;
-                send_next_digit(display_value, display_dotmask);
+                send_next_glyph();
             }
         }
     }

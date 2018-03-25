@@ -1,15 +1,14 @@
 #pragma once
 #include "icemu.h"
 
-#ifndef MAX_DIGITS
-#define MAX_DIGITS 4
-#endif
+#define DIGITS 4
 
 typedef struct {
     ICeChip mcu;
-    ICeChip sr1;
-    ICeChip sr2;
-    ICeChip segs[MAX_DIGITS];
+    ICeChip sr;
+    ICeChip cnt;
+    ICeChip dec;
+    ICeChip segs[DIGITS];
     ICePin *PB0;
     ICePin *PB1;
     ICePin *PB2;
