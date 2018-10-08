@@ -26,7 +26,7 @@ void seg7multiplex_circuit_init(Seg7Multiplex *circuit, ICePin *ser, ICePin *clk
 
     icemu_pin_wireto(circuit->PB3, icemu_chip_getpin(&circuit->sr, "SRCLK"));
     icemu_pin_wireto(circuit->PB4, icemu_chip_getpin(&circuit->sr, "SER"));
-    icemu_pin_wireto(circuit->PB3, icemu_chip_getpin(&circuit->sr, "RCLK"));
+    icemu_pin_wireto(circuit->PB0, icemu_chip_getpin(&circuit->sr, "RCLK"));
     icemu_pin_wireto(circuit->PB0, icemu_chip_getpin(&circuit->sr, "OE"));
 
     icemu_pin_wireto(circuit->PB0, icemu_chip_getpin(&circuit->cnt, "CLK"));

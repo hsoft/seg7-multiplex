@@ -1,4 +1,5 @@
 EESchema Schematic File Version 4
+LIBS:seg7multiplex-cache
 EELAYER 26 0
 EELAYER END
 $Descr A4 11693 8268
@@ -211,18 +212,9 @@ NoConn ~ 7900 3450
 NoConn ~ 9450 3450
 Text Label 6200 5900 0    60   ~ 0
 VCC
-NoConn ~ 6150 5800
-NoConn ~ 4750 6000
 Text Label 4600 5800 0    60   ~ 0
 VCC
 NoConn ~ 6150 5300
-NoConn ~ 4750 5600
-NoConn ~ 4750 5500
-NoConn ~ 4750 5400
-NoConn ~ 4750 5300
-NoConn ~ 6800 6100
-NoConn ~ 6800 6000
-NoConn ~ 6800 5900
 $Comp
 L MCU_Microchip_ATtiny:ATtiny45-20PU IC1
 U 1 1 5AAE97E0
@@ -434,14 +426,7 @@ Wire Wire Line
 Wire Wire Line
 	4750 5800 4600 5800
 Wire Wire Line
-	2900 1500 2900 1800
-Wire Wire Line
 	2900 1500 3400 1500
-Wire Wire Line
-	3400 1800 2900 1800
-Connection ~ 2900 1800
-Wire Wire Line
-	4750 5900 4600 5900
 Wire Wire Line
 	4800 3100 4800 3350
 Wire Wire Line
@@ -451,7 +436,7 @@ Wire Wire Line
 Wire Wire Line
 	9450 3100 9450 3350
 Wire Wire Line
-	6150 5900 6350 5900
+	6150 5900 6800 5900
 Text Label 3800 900  0    60   ~ 0
 GND
 $Comp
@@ -544,8 +529,6 @@ Wire Wire Line
 Wire Wire Line
 	2900 2750 2550 2750
 Wire Wire Line
-	2900 1800 2900 2750
-Wire Wire Line
 	3400 1900 3050 1900
 Wire Wire Line
 	3050 1900 3050 3050
@@ -603,8 +586,6 @@ Connection ~ 2250 4200
 Wire Wire Line
 	2250 4200 2250 4250
 Wire Wire Line
-	1950 4400 2150 4400
-Wire Wire Line
 	1950 4500 2150 4500
 Text Label 1950 4500 0    60   ~ 0
 INCLK
@@ -625,5 +606,89 @@ Wire Wire Line
 	800  4900 1650 4900
 Connection ~ 1650 4900
 Wire Wire Line
-	1650 4900 1650 5150
+	1650 4900 1650 5100
+Text Label 4600 6000 0    60   ~ 0
+VCC
+Wire Wire Line
+	4750 6000 4600 6000
+Wire Wire Line
+	6150 5800 6150 5900
+Connection ~ 6150 5900
+Wire Wire Line
+	4750 5600 4750 5500
+Wire Wire Line
+	4750 4950 5150 4950
+Connection ~ 4750 5300
+Wire Wire Line
+	4750 5300 4750 4950
+Connection ~ 4750 5400
+Wire Wire Line
+	4750 5400 4750 5300
+Connection ~ 4750 5500
+Wire Wire Line
+	4750 5500 4750 5400
+Wire Wire Line
+	6800 6100 6800 6000
+Connection ~ 6800 5900
+Connection ~ 6800 6000
+Wire Wire Line
+	6800 6000 6800 5900
+$Comp
+L Device:R R7
+U 1 1 5BBC7702
+P 4450 5750
+F 0 "R7" V 4530 5750 50  0000 C CNN
+F 1 "10K" V 4450 5750 50  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 4380 5750 50  0001 C CNN
+F 3 "" H 4450 5750 50  0000 C CNN
+	1    4450 5750
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4450 5900 4750 5900
+Wire Wire Line
+	4450 5600 4750 5600
+Connection ~ 4750 5600
+$Comp
+L Device:R R5
+U 1 1 5BBD2344
+P 1800 4900
+F 0 "R5" V 1880 4900 50  0000 C CNN
+F 1 "10K" V 1800 4900 50  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 1730 4900 50  0001 C CNN
+F 3 "" H 1800 4900 50  0000 C CNN
+	1    1800 4900
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R6
+U 1 1 5BBD23DC
+P 1800 5100
+F 0 "R6" V 1880 5100 50  0000 C CNN
+F 1 "10K" V 1800 5100 50  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 1730 5100 50  0001 C CNN
+F 3 "" H 1800 5100 50  0000 C CNN
+	1    1800 5100
+	0    1    1    0   
+$EndComp
+Connection ~ 1650 5100
+Wire Wire Line
+	1650 5100 1650 5150
+Wire Wire Line
+	2150 4500 2150 4900
+Wire Wire Line
+	2150 4900 1950 4900
+Wire Wire Line
+	2300 4400 2300 5100
+Wire Wire Line
+	2300 5100 1950 5100
+Wire Wire Line
+	1950 4400 2300 4400
+Wire Wire Line
+	2900 1500 2900 2750
+Wire Wire Line
+	3400 1800 3050 1800
+Wire Wire Line
+	3050 1800 3050 1900
+Connection ~ 3050 1900
 $EndSCHEMATC

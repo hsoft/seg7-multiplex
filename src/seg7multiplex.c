@@ -16,7 +16,7 @@
 
 #define SRCLK PinB3
 #define SER PinB4
-#define CNT PinB0
+#define RCLK PinB0
 #define INCLK PinB2
 #define INSER PinB1
 
@@ -25,36 +25,53 @@
 #define DIGITS 4
 #endif
 
-/* ABOUT THE COMPLEXITY OF THIS UNIT
+/* 7-segments multiplexer
  *
- * Making the choice of an ATtiny MCU greatly limits our available pins and forces us to make
- * interesting compromises. This brought us to a design where the SER pin is shared for both
- * SR1, SR2 *and* input data. I first started developing the "multiplexing display" part of the
- * device with a naive algo that woked well both in simulation and real world, all was good.
+ * This code uses an ATtiny to display numbers from 0000 to 9999 on 4
+ * 7-segments displays. It does it in a multiplexing way, that is, by quickly
+ * and repeatedly refresh displays and take advantage of the fact that the
+ * display can be off for up to 10ms before the eye starts to see a flicker.
  *
- * But then, I wanted to make the serial input work, I thought it would be easy, but no! It turns
- * out that toggling a pin from output to input to output again in an interrupt frequently causes
- * clash with our two SRs (who would have thunk?).
+ * It works by cycling through the 15 glyphs built in the SN74LS47 (we skip the
+ * blank glyph). For each glyph, we determine which of the 4 displays should be
+ * enabled and set the SN74HC595 to send power the the enabled displays.
  *
- * In the previous naive algo, 8bit data sent to SR1 was done all in one shot, in a for loop. In
- * between CLK low/high, there was a 1us delay. This approach pretty much guaranteed clashes when
- * serial input would come around. I had to use another approach. This one.
+ * The number to display is sent serially through INSER and INCLK.
  *
- * In a word, I "atomicised" all operations to much smaller chunks of logic at the cost of
- * increased overall complexity.
+ * Making the choice of an ATtiny MCU greatly limits our available pins and
+ * forces us to make interesting compromises. To maximize the responsiveness of
+ * serial input and ensure that we don't miss a bit, we have to make sure that
+ * the MCU can't be kept busy for too long: there can't be two bits of data set
+ * during a single loop() call.
  *
- * With this approach, we perform SR1 update in 16 atomic steps, each one being performed (if
- * needed) in separate runloop iterations.
+ * All operations are agressively "atomicised" to smal chunks of logic at the
+ * cost of increased overall complexity.
  *
- * Higher priority is given to the reading of serial data coming through the interrupt. This queue
- * really has to be emptied as fast as possible because we don't have control over the speed at
- * which data is coming in.
+ * With this approach, we perform shift register update in 16 atomic steps,
+ * each one being performed (if needed) in separate runloop iterations.
  *
- * Lower priority is given to the screen refreshing because we have ample time here. It takes 10ms
- * without power for a segment to start showing flickering and we're significantly below that with
- * 4 digits. We could easily support 8.
+ * Higher priority is given to the reading of serial data coming through the
+ * interrupt. This queue really has to be emptied as fast as possible because
+ * we don't have control over the speed at which data is coming in.
  *
- * An important lesson learned here: keep code in interrupt routines minimal, really barebone.
+ * Lower priority is given to the screen refreshing because we have ample time
+ * here. It takes 10ms without power for a segment to start showing flickering
+ * and we're significantly below that with 4 digits. We could easily support 8.
+ *
+ * LESSON LEARNED 2018-10-07: don't overestimate MCU's capabilities
+ *
+ * We're so used to powerful computers that we take their power for granted.
+ * A couple of additional function calls and ifs can go a long way to make your
+ * stuff too slow. In my second prototype, I had a flickering problem. Whatever
+ * I would do (make refreshes faster, slower, whatever), my display would
+ * flicker badly. I did a little optimization here and there, to no avail. I
+ * was about to give up and go back to my first prototype (which at least
+ * didn't flicker!) when my last ditch effort paid off: store and compare the
+ * display value as an array of digits and give up the idea of matching glyphs
+ * 10 to 14. It would avoid a few arithmetic operations, one function jump and
+ * a couple of ifs and ... no flicker! This means that the MCU just wasn't fast
+ * enough to keep up with the refresh rate.
+ * were off was time MCU was doing these
  */
 
 static volatile bool refresh_needed;
@@ -62,7 +79,8 @@ static volatile bool input_mode;
 
 static uint8_t ser_input;
 static uint8_t ser_input_pos;
-static uint32_t display_value;
+// First element of array is rightmost digit
+static uint8_t display_digits[DIGITS] = {1, 8, 2, 1};
 static uint8_t display_dotmask;
 static uint8_t digit_count;
 static uint8_t ser_timeout;
@@ -166,62 +184,50 @@ static SRValueSenderStatus sr_sender_step()
     return res;
 }
 
-static bool glyph_matches(uint8_t glyph, uint8_t digit)
-{
-    if ((glyph < 10) && (glyph == digit)) {
-        return true;
-    }
-    if (glyph > 15) {
-        return false;
-    }
-    if (digit == 8) {
-        return true;
-    }
-    switch (glyph) {
-        case 1: return (digit == 0) || (digit == 3) || (digit == 4) || (digit == 7) || (digit == 9);
-        case 5: return (digit == 6);
-        case 7: return (digit == 0) || (digit == 3) || (digit == 9);
-        case 10: return (digit == 2) || (digit == 6);
-        case 11: return (digit == 3) || (digit == 5) || (digit == 6);
-        case 12: return (digit == 4) || (digit == 9);
-        case 13: return (digit == 5) || (digit == 6) || (digit == 9);
-        case 14: return (digit == 6);
-    }
-    return false;
-}
-
-static uint8_t glyph_match_mask(uint16_t val, uint8_t glyph)
+static uint8_t glyph_match_mask(uint8_t glyph)
 {
     uint8_t res = 0;
     uint8_t i;
 
+    if (glyph >= 10) {
+        // Never matches
+        return 0;
+    }
     for (i=0; i<DIGITS; i++) {
-        if (glyph_matches(glyph, val % 10)) {
+        if (display_digits[i] == glyph) {
             res |= (1 << i);
         }
-        val /= 10;
     }
 
     return res;
 }
 
-static void send_next_glyph()
+/* Except for skipping a glyph, we don't control RCLK's status here It is
+ * exclusively controlled by SR's update routine to maximize the time OE is
+ * enabled (low) so that we send a maximum of light to our displays to avoid
+ * flickers.
+ */
+static bool select_next_glyph()
 {
     uint8_t tosend;
 
     current_glyph++;
-    if (current_glyph == 0xf) {
-        // 15 is the blank character. There's nothing interesting to do with it,
-        // skip it.
-        pinhigh(CNT);
-        _delay_us(1);
-        pinlow(CNT);
+    if (current_glyph == 0x10) {
         current_glyph = 0;
     }
-    pinhigh(CNT);
-    tosend = glyph_match_mask(display_value, current_glyph);
+    tosend = glyph_match_mask(current_glyph);
     tosend |= (~display_dotmask << 4);
-    init_sr_sender(tosend);
+    if (tosend != sr_sender.val) {
+        init_sr_sender(tosend);
+        return true;
+    } else {
+        // Same digit mask! We don't bother sending the same value to the SR,
+        // but we still need to make the counter go forward.
+        pinhigh(RCLK);
+        _delay_us(1);
+        pinlow(RCLK);
+        return false;
+    }
 }
 
 // Returns whether we had anything to do at all
@@ -237,17 +243,12 @@ static bool perform_display_step()
         case SRValueSenderStatus_Middle:
             break;
         case SRValueSenderStatus_Last:
-            // because RCLK is hard-wired to SRCLK on SR, we need to perform one more
-            // SRCLK "push" at the end to push the buffer up to the output pins. Had I known
-            // about the difficulties I would have had with the "shared SER" approach I've
-            // tried and then abandoned, I would have used a buffer-less SR here to save us
-            // this wart, but now that the prototye is all soldered-up, we'll suck it up.
-            /*pinlow(SRCLK); */
-            /*_delay_us(1);  */
-            /*pinhigh(SRCLK);*/
+            // Flush out the buffer with RCLK
+            pinhigh(RCLK); // Also triggers the counter!
+            _delay_us(1);
+            pinlow(RCLK); // return to low for OE to be enabled
             break;
         case SRValueSenderStatus_Finished:
-            pinlow(CNT);
             res = false;
             break;
     }
@@ -257,8 +258,6 @@ static bool perform_display_step()
 
 static void push_digit(uint8_t value)
 {
-    uint32_t amount_to_add;
-
     if (value & 0b10000) {
         display_dotmask |= (1 << digit_count);
         value &= 0b1111;
@@ -268,11 +267,8 @@ static void push_digit(uint8_t value)
         return;
     }
 
-    if (digit_count == 0) {
-        display_value = value;
-    } else {
-        amount_to_add = value * int_pow10(digit_count);
-        display_value += amount_to_add;
+    if (digit_count < DIGITS) {
+        display_digits[digit_count] = value;
     }
     digit_count++;
 }
@@ -282,7 +278,6 @@ static void begin_input_mode()
     input_mode = true;
     ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
     digit_count = 0;
-    display_value = 0;
     display_dotmask = 0;
     ser_input_pos = 0;
     ser_input = 0;
@@ -331,12 +326,11 @@ void seg7multiplex_setup()
 
     pinoutputmode(SER);
     pinoutputmode(SRCLK);
-    pinoutputmode(CNT);
+    pinoutputmode(RCLK);
 
     input_mode = false;
     serial_queue_init();
     sr_sender.index = 8; // begin in "finished" mode;
-    display_value = 0;
     display_dotmask = 0;
     ser_timeout = 0;
     current_glyph = 0;
@@ -390,13 +384,10 @@ void seg7multiplex_loop()
             }
         }
     } else {
-        if (!perform_display_step()) {
-            // Alright, we're not in the middle of something. Let's see if we have a digit to
-            // refresh...
-            if (refresh_needed) {
-                refresh_needed = false;
-                send_next_glyph();
-            }
+        while (perform_display_step()) { if (input_mode) return; }
+        if (refresh_needed) {
+            while (!select_next_glyph()){ if (input_mode) return; }
+            refresh_needed = false;
         }
     }
 }
