@@ -67,7 +67,7 @@ static void push_number(uint32_t val, uint8_t display_dotmask)
 
     for (i = 0; i < DIGITS; i++) {
         hasdot = display_dotmask & (1 << i);
-        push_digit((val / int_pow10(DIGITS - i - 1)) % 10, hasdot);
+        push_digit((val / int_pow10(i)) % 10, hasdot);
         // let the runloop breathe a little
         seg7multiplex_loop();
     }
@@ -159,7 +159,7 @@ int main()
         icemu_ui_add_element("FTDI", &ftdi);
     }
     for (i = 0; i < DIGITS; i++) {
-        icemu_ui_add_element("", &circuit.segs[i]);
+        icemu_ui_add_element("", &circuit.segs[DIGITS - i - 1]);
     }
     push_number(display_val, display_dotmask);
     icemu_sim_run();

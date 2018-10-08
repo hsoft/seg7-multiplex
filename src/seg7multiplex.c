@@ -90,7 +90,7 @@ static uint8_t current_glyph;
 // writing 16 times before we have the change to read anything. The algo using this really must
 // properly prioritize the reading of this queue.
 typedef struct {
-    uint16_t data;
+    uint8_t data;
     uint8_t write_index;
     uint8_t read_index;
 } SerialQueue;
@@ -129,7 +129,7 @@ static void serial_queue_write(bool data)
         serial_queue.data &= ~(1 << serial_queue.write_index);
     }
     serial_queue.write_index++;
-    if (serial_queue.write_index == 16) {
+    if (serial_queue.write_index == 8) {
         serial_queue.write_index = 0;
     }
 }
@@ -141,7 +141,7 @@ static bool serial_queue_read(bool *data)
     }
     *data = (serial_queue.data & (1 << serial_queue.read_index)) > 0;
     serial_queue.read_index++;
-    if (serial_queue.read_index == 16) {
+    if (serial_queue.read_index == 8) {
         serial_queue.read_index = 0;
     }
     return true;

@@ -582,11 +582,6 @@ Wire Wire Line
 Connection ~ 1400 5150
 Wire Wire Line
 	1950 4200 2250 4200
-Connection ~ 2250 4200
-Wire Wire Line
-	2250 4200 2250 4250
-Wire Wire Line
-	1950 4500 2150 4500
 Text Label 1950 4500 0    60   ~ 0
 INCLK
 Text Label 1950 4400 0    60   ~ 0
@@ -599,14 +594,12 @@ Wire Wire Line
 	800  3850 800  3950
 Connection ~ 2250 3850
 Wire Wire Line
-	2250 3850 2250 4200
+	2250 3850 2250 4100
 Wire Wire Line
 	800  4250 800  4900
 Wire Wire Line
 	800  4900 1650 4900
 Connection ~ 1650 4900
-Wire Wire Line
-	1650 4900 1650 5100
 Text Label 4600 6000 0    60   ~ 0
 VCC
 Wire Wire Line
@@ -652,36 +645,25 @@ Connection ~ 4750 5600
 $Comp
 L Device:R R5
 U 1 1 5BBD2344
-P 1800 4900
-F 0 "R5" V 1880 4900 50  0000 C CNN
-F 1 "10K" V 1800 4900 50  0000 C CNN
-F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 1730 4900 50  0001 C CNN
-F 3 "" H 1800 4900 50  0000 C CNN
-	1    1800 4900
+P 2450 4550
+F 0 "R5" V 2530 4550 50  0000 C CNN
+F 1 "10K" V 2450 4550 50  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 2380 4550 50  0001 C CNN
+F 3 "" H 2450 4550 50  0000 C CNN
+	1    2450 4550
 	0    1    1    0   
 $EndComp
 $Comp
 L Device:R R6
 U 1 1 5BBD23DC
-P 1800 5100
-F 0 "R6" V 1880 5100 50  0000 C CNN
-F 1 "10K" V 1800 5100 50  0000 C CNN
-F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 1730 5100 50  0001 C CNN
-F 3 "" H 1800 5100 50  0000 C CNN
-	1    1800 5100
+P 2450 4400
+F 0 "R6" V 2530 4400 50  0000 C CNN
+F 1 "10K" V 2450 4400 50  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 2380 4400 50  0001 C CNN
+F 3 "" H 2450 4400 50  0000 C CNN
+	1    2450 4400
 	0    1    1    0   
 $EndComp
-Connection ~ 1650 5100
-Wire Wire Line
-	1650 5100 1650 5150
-Wire Wire Line
-	2150 4500 2150 4900
-Wire Wire Line
-	2150 4900 1950 4900
-Wire Wire Line
-	2300 4400 2300 5100
-Wire Wire Line
-	2300 5100 1950 5100
 Wire Wire Line
 	1950 4400 2300 4400
 Wire Wire Line
@@ -691,4 +673,20 @@ Wire Wire Line
 Wire Wire Line
 	3050 1800 3050 1900
 Connection ~ 3050 1900
+Wire Wire Line
+	1650 4900 1650 5150
+Wire Wire Line
+	2600 4400 2600 4100
+Wire Wire Line
+	2600 4100 2250 4100
+Connection ~ 2250 4100
+Wire Wire Line
+	2250 4100 2250 4200
+Wire Wire Line
+	2300 4500 2300 4550
+Wire Wire Line
+	1950 4500 2300 4500
+Wire Wire Line
+	2600 4550 2600 4400
+Connection ~ 2600 4400
 $EndSCHEMATC
