@@ -1,9 +1,10 @@
 # Multiplexed 7-segment display array
 
-This board is a multiplexed array of up to 8 7-segment displays with a minimal
-number of input pins. It's multiplexed to minimize the number of pins and ICs
-we need to use. We end up only needing an ATtiny45 and two shift registers to
-drive up to 8 digits.
+This board is a multiplexed array of 4 7-segment displays that receives its
+input through a custom serial protocol. The board uses a USB-A connector to
+connect `VCC`, `GND` and its two serial pins. It's multiplexed to minimize the
+number of pins and ICs we need to use. We end up only needing an ATtiny45 and
+2 ICs to drive pu the 4 displays.
 
 The goal is to be able to offload the "digit display" complexity off little
 devices I'm planning to do. Of course, there's tons of ready-to-use displays
@@ -13,15 +14,12 @@ I'm also hoping to have something that draws minimal current. My first
 prototype works on 3V and draws less than 6mA. For reference, the backlight of
 a typical 2x8 LCD screen draws something like 20-40mA.
 
-The idea is to use the 4 wires of USB connectors to power the display and send
-serial data using a homemade protocol that tells it what number to show.
-
 ## Serial protocol
 
-It works by serially sending it 5 bits of data using `SER` and `CLK`, the first
-4 bits being an encoded digit from `0` to `9` (starting with the least
-significant bit) and ending with a "dot" bit that determines if the dot is shown
-or not.
+It works by serially sending it 5 bits of data using `INSER` and `INCLK`, the
+first 4 bits being an encoded digit from `0` to `9` (starting with the least
+significant bit) and ending with a "dot" bit that determines if the dot is
+shown or not.
 
 This is done for each digit that needs to be shown (starting with the rightmost
 digit). Thus, to show 2 digits, we send 10 bits.
@@ -38,7 +36,7 @@ The board itself takes care of properly refreshing the displays. We refresh one
 display every 1ms, cycling over active displays. We only need to send new digits
 when they change.
 
-## Prototype
+## Prototypes
 
 ### v1
 
@@ -66,12 +64,12 @@ KiCAD schema though. Never bothered. Will do for v2 though.
 ### v2
 
 Although I think that my design for v1 was globally sound, I think in
-retrospective that the MCU does too many things. The less things the MCU does,
+retrospective that the MCU did too many things. The less things the MCU does,
 the more logic you offload to ICs, the more robust your design is going to be (I
 think). After all, people designing ICs went through much more trouble to make
 sure it worked well than I did for my prototype...
 
-So that's why I'm trying a new multiplex design here, with 3 ICs:
+So that's why I went with a new multiplex design with 3 ICs:
 
 1. 7-segment decoder hooked to my displays
 2. binary counter hooked to the decoder
@@ -120,14 +118,26 @@ cycle to trigger). I haven't looked yet whether I'm going to be needing an
 inverter for this. If yes, I'll probably look for a shift register that allows
 me to do that without an inverter (an extra IC just for this seem a bit much).
 
-### Status
+**Conclusion**: It went well! It was the first time I ordered a PCB from a
+KiCAD design. Of course, I made some mistakes in it and a lot of cowboy
+soldering was necessary to adjust, but in the end, I had a fully functional
+prototype! Unlike v1, it received data properly and displayed it correctly!
 
-1. ~~Plan the thing out in the readme~~
-2. ~~Draw a KiCAD schema~~
-3. ~~Code a `icemu` simulation~~
-4. Solder a prototype
-5. Iron out issues
-6. Order a PCB?
+However, I'm not done yet, I need a v3 because 3 ICs is too many: I'd like to
+get this package in a 55mmx30mmx20mm enclosure. I'll need to go "double side"
+and remove an IC.
+
+### v3
+
+With v3, I get rid of the counter. Instead of using 4 bits of the SR for DP,
+I connect them to the BCD. Then, I connect SER to DP add a refresh "round"
+especially for DP. This means that we generally have to keep SER high to avoid
+falsely lighting DPs.
+
+It still offloads most of the complexity to the BCD and gets rid of an IC.
+Moreover, althrough I didn't experience it, I felt that the CNT approach was
+flaky: the counter **had** to stay in sync with the MCU and the MCU had no way
+to reset the counter to enforce syncing (not enough pins).
 
 ## Simulation
 
