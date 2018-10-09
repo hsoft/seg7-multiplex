@@ -6,7 +6,6 @@
 typedef struct {
     ICeChip mcu;
     ICeChip sr;
-    ICeChip cnt;
     ICeChip dec;
     ICeChip segs[DIGITS];
     ICePin *PB0;

@@ -153,7 +153,6 @@ int main()
     icemu_sim_add_action('d', "Cycle (d)otmask", cycle_dotmask);
     icemu_ui_add_element("MCU", &circuit.mcu);
     icemu_ui_add_element("SR", &circuit.sr);
-    icemu_ui_add_element("CNT", &circuit.cnt);
     icemu_ui_add_element("DEC", &circuit.dec);
     if (has_ftdi) {
         icemu_ui_add_element("FTDI", &ftdi);

@@ -15,7 +15,6 @@ void seg7multiplex_circuit_init(Seg7Multiplex *circuit, ICePin *ser, ICePin *clk
     circuit->PB3 = circuit->mcu.pins.pins[3];
     circuit->PB4 = circuit->mcu.pins.pins[4];
     icemu_SN74HC595_init(&circuit->sr);
-    icemu_SN74F161AN_init(&circuit->cnt);
     icemu_SN7447A_init(&circuit->dec);
     sr_lu = (ShiftRegister *)circuit->sr.logical_unit;
     for (i = 0; i < DIGITS; i++) {
@@ -29,16 +28,14 @@ void seg7multiplex_circuit_init(Seg7Multiplex *circuit, ICePin *ser, ICePin *clk
     icemu_pin_wireto(circuit->PB0, icemu_chip_getpin(&circuit->sr, "RCLK"));
     icemu_pin_wireto(circuit->PB0, icemu_chip_getpin(&circuit->sr, "OE"));
 
-    icemu_pin_wireto(circuit->PB0, icemu_chip_getpin(&circuit->cnt, "CLK"));
-
-    icemu_pin_wireto(icemu_chip_getpin(&circuit->cnt, "QA"), icemu_chip_getpin(&circuit->dec, "A"));
-    icemu_pin_wireto(icemu_chip_getpin(&circuit->cnt, "QB"), icemu_chip_getpin(&circuit->dec, "B"));
-    icemu_pin_wireto(icemu_chip_getpin(&circuit->cnt, "QC"), icemu_chip_getpin(&circuit->dec, "C"));
-    icemu_pin_wireto(icemu_chip_getpin(&circuit->cnt, "QD"), icemu_chip_getpin(&circuit->dec, "D"));
+    icemu_pin_wireto(icemu_chip_getpin(&circuit->sr, "QE"), icemu_chip_getpin(&circuit->dec, "A"));
+    icemu_pin_wireto(icemu_chip_getpin(&circuit->sr, "QF"), icemu_chip_getpin(&circuit->dec, "B"));
+    icemu_pin_wireto(icemu_chip_getpin(&circuit->sr, "QG"), icemu_chip_getpin(&circuit->dec, "C"));
+    icemu_pin_wireto(icemu_chip_getpin(&circuit->sr, "QH"), icemu_chip_getpin(&circuit->dec, "D"));
 
     for (i = 0; i < DIGITS; i++) {
         icemu_displaydecoder_wireto_seg7(&circuit->dec, &circuit->segs[i]);
         icemu_pin_wireto(icemu_ledmatrix_vcc(&circuit->segs[i]), sr_lu->outputs.pins[i]);
-        icemu_pin_wireto(icemu_chip_getpin(&circuit->segs[i], "DP"), sr_lu->outputs.pins[i+4]);
+        icemu_pin_wireto(icemu_chip_getpin(&circuit->segs[i], "DP"), circuit->PB4);
     }
 }

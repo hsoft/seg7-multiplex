@@ -15,7 +15,7 @@
 
 
 #define SRCLK PinB3
-#define SER PinB4
+#define SER_DP PinB4
 #define RCLK PinB0
 #define INCLK PinB2
 #define INSER PinB1
@@ -167,7 +167,7 @@ static SRValueSenderStatus sr_sender_step()
             if (sr_sender.index == 7) {
                 res = SRValueSenderStatus_Last;
             }
-            pinset(SER, sr_sender.val & (1 << (7 - sr_sender.index)));
+            pinset(SER_DP, sr_sender.val & (1 << (7 - sr_sender.index)));
             pinhigh(SRCLK);
             sr_sender.going_high = false;
             sr_sender.index++;
@@ -184,50 +184,35 @@ static SRValueSenderStatus sr_sender_step()
     return res;
 }
 
-static uint8_t glyph_match_mask(uint8_t glyph)
-{
-    uint8_t res = 0;
-    uint8_t i;
-
-    if (glyph >= 10) {
-        // Never matches
-        return 0;
-    }
-    for (i=0; i<DIGITS; i++) {
-        if (display_digits[i] == glyph) {
-            res |= (1 << i);
-        }
-    }
-
-    return res;
-}
-
-/* Except for skipping a glyph, we don't control RCLK's status here It is
- * exclusively controlled by SR's update routine to maximize the time OE is
- * enabled (low) so that we send a maximum of light to our displays to avoid
- * flickers.
- */
 static bool select_next_glyph()
 {
-    uint8_t tosend;
+    // low 4 bits of tosend contain the display mask.
+    // high 4 bits of tosend contain the glyph number.
+    uint8_t tosend = 0;
+    uint8_t i;
+    bool res = false;
 
-    current_glyph++;
-    if (current_glyph == 0x10) {
+    if (current_glyph == 10) {
+        // Round of DP display
+        // 15 is the "blank" glyph.
+        if (display_dotmask) {
+            init_sr_sender(display_dotmask | (15 << 4));
+            res = true;
+        }
         current_glyph = 0;
-    }
-    tosend = glyph_match_mask(current_glyph);
-    tosend |= (~display_dotmask << 4);
-    if (tosend != sr_sender.val) {
-        init_sr_sender(tosend);
-        return true;
     } else {
-        // Same digit mask! We don't bother sending the same value to the SR,
-        // but we still need to make the counter go forward.
-        pinhigh(RCLK);
-        _delay_us(1);
-        pinlow(RCLK);
-        return false;
+        for (i=0; i<DIGITS; i++) {
+            if (display_digits[i] == current_glyph) {
+                tosend |= (1 << i);
+            }
+        }
+        if (tosend) {
+            init_sr_sender(tosend | (current_glyph << 4));
+            res = true;
+        }
+        current_glyph++;
     }
+    return res;
 }
 
 // Returns whether we had anything to do at all
@@ -243,8 +228,10 @@ static bool perform_display_step()
         case SRValueSenderStatus_Middle:
             break;
         case SRValueSenderStatus_Last:
+            // Only enable DP (low) during the DP round.
+            pinset(SER_DP, current_glyph != 0);
             // Flush out the buffer with RCLK
-            pinhigh(RCLK); // Also triggers the counter!
+            pinhigh(RCLK);
             _delay_us(1);
             pinlow(RCLK); // return to low for OE to be enabled
             break;
@@ -324,9 +311,11 @@ void seg7multiplex_setup()
     sei();
 #endif
 
-    pinoutputmode(SER);
+    pinoutputmode(SER_DP);
     pinoutputmode(SRCLK);
     pinoutputmode(RCLK);
+    // we generally keep SER_DP high to avoid lighting DP
+    pinhigh(SER_DP);
 
     input_mode = false;
     serial_queue_init();
