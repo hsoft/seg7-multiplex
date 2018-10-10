@@ -35,7 +35,8 @@ void seg7multiplex_circuit_init(Seg7Multiplex *circuit, ICePin *ser, ICePin *clk
 
     for (i = 0; i < DIGITS; i++) {
         icemu_displaydecoder_wireto_seg7(&circuit->dec, &circuit->segs[i]);
-        icemu_pin_wireto(icemu_ledmatrix_vcc(&circuit->segs[i]), sr_lu->outputs.pins[i]);
+        icemu_pin_wireto(icemu_ledmatrix_common_pin(
+            &circuit->segs[i]), sr_lu->outputs.pins[i]);
         icemu_pin_wireto(icemu_chip_getpin(&circuit->segs[i], "DP"), circuit->PB4);
     }
 }
