@@ -203,7 +203,7 @@ static bool select_next_glyph()
     } else {
         for (i=0; i<DIGITS; i++) {
             if (display_digits[i] == current_glyph) {
-                tosend |= (1 << i);
+                tosend |= (1 << (DIGITS - i - 1));
             }
         }
         if (tosend) {
