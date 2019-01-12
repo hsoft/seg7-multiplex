@@ -247,6 +247,17 @@ static bool perform_display_step()
 
     switch (sr_sender_step()) {
         case SRValueSenderStatus_Beginning:
+            /* While we send value to the shift register, SER_DP will change.
+             * Because we want to avoid falsely lighting DP, we need to disable
+             * output (disable OE) while that happens. This is why we set RCLK,
+             * which is wired to OE too, HIGH (OE disabled) at the beginning of
+             * the SR operation.
+             *
+             * Because RCLK was low before, this triggers a "buffer clock" on
+             * the SR, but it doesn't matter because the value that was there
+             * before has just been invalidated.
+             */
+            pinhigh(RCLK);
             break;
         case SRValueSenderStatus_Middle:
             break;
@@ -254,9 +265,11 @@ static bool perform_display_step()
             // Only enable DP (low) during the DP round.
             pinset(SER_DP, current_glyph != 0);
             // Flush out the buffer with RCLK
-            pinhigh(RCLK);
+            pinlow(RCLK); // OE enabled, but SR buffer isn't flushed
             _delay_us(1);
-            pinlow(RCLK); // return to low for OE to be enabled
+            pinhigh(RCLK); // SR buffer flushed, OE disabled
+            _delay_us(1);
+            pinlow(RCLK); // OE enabled
             break;
         case SRValueSenderStatus_Finished:
             res = false;
