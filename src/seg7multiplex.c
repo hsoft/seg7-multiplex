@@ -13,11 +13,27 @@
 #include "../common/timer.h"
 #include "../common/intmath.h"
 
-
+// Clock pin of our shift register
 #define SRCLK PinB3
+
+/* SER_DP is wired to both our shift register (data pin) and the DP pin of
+ * every display.
+ *
+ * We generally keep this pin HIGH to avoid lighting the dot on our displays.
+ */
 #define SER_DP PinB4
+
+/* "Buffer clock" pin of the shift register. Also wired to OE.
+ *
+ * We generally want to keep this pin LOW so that outputs are enabled most of\
+ * the time.
+ */
 #define RCLK PinB0
+
+// Input clock
 #define INCLK PinB2
+
+// Input data
 #define INSER PinB1
 
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
@@ -32,9 +48,15 @@
  * and repeatedly refresh displays and take advantage of the fact that the
  * display can be off for up to 10ms before the eye starts to see a flicker.
  *
- * It works by cycling through the 15 glyphs built in the SN74LS47 (we skip the
- * blank glyph). For each glyph, we determine which of the 4 displays should be
- * enabled and set the SN74HC595 to send power the the enabled displays.
+ * It works by cycling through the 10 first glyphs built in the SN74LS47. When
+ * at least one display has the glyph, we send that number, along with the
+ * display mask (the shift register's output is splitted in half: 4 bits for
+ * the glyph and 4bits for the display mask) to our SN74HC595 shift register.
+ *
+ * The dot is displayed through SER_DP, which is wired to the DP pin of every
+ * display. When we have a display_dotmask, we run a "blank glyph" run and set
+ * SER_DP LOW (enabled) along with a display mask in the shift register to
+ * specify which displays get the dot.
  *
  * The number to display is sent serially through INSER and INCLK.
  *
@@ -44,7 +66,7 @@
  * the MCU can't be kept busy for too long: there can't be two bits of data set
  * during a single loop() call.
  *
- * All operations are agressively "atomicised" to smal chunks of logic at the
+ * All operations are agressively "atomicised" to small chunks of logic at the
  * cost of increased overall complexity.
  *
  * With this approach, we perform shift register update in 16 atomic steps,
@@ -56,7 +78,7 @@
  *
  * Lower priority is given to the screen refreshing because we have ample time
  * here. It takes 10ms without power for a segment to start showing flickering
- * and we're significantly below that with 4 digits. We could easily support 8.
+ * and we're significantly below that with 4 digits.
  *
  * LESSON LEARNED 2018-10-07: don't overestimate MCU's capabilities
  *
@@ -68,10 +90,11 @@
  * was about to give up and go back to my first prototype (which at least
  * didn't flicker!) when my last ditch effort paid off: store and compare the
  * display value as an array of digits and give up the idea of matching glyphs
- * 10 to 14. It would avoid a few arithmetic operations, one function jump and
- * a couple of ifs and ... no flicker! This means that the MCU just wasn't fast
- * enough to keep up with the refresh rate.
- * were off was time MCU was doing these
+ * 10 to 14 (that was the idea initially: cycle through all available glyphs,
+ * even partial ones (10 to 14) to maximize "segment lighting time"). It would
+ * avoid a few arithmetic operations, one function jump and a couple of ifs and
+ * ... no flicker! This means that the MCU just wasn't fast enough to keep up
+ * with the refresh rate.
  */
 
 static volatile bool refresh_needed;
