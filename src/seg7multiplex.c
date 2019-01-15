@@ -37,9 +37,17 @@
 #define INSER PinB1
 
 #define MAX_SER_CYCLES_BEFORE_TIMEOUT 3
-#ifndef DIGITS
 #define DIGITS 4
-#endif
+
+/* When defined, we enable a special debug mode to be able to debug serial
+ * input problems. In normal mode, when we receive partial serial input, that
+ * is, clocking that doesn't finish before timeout expires, we do nothing. When
+ * in debug mode, we highlight the rightmost DP to indicate an error and the
+ * displayed value becomes a debug indicator: The 3 leftmost digits are the
+ * number of times in a row we had an error condition and the rightmost digit\
+ * is the number of clocks that our last communication attempt expired at.
+ */
+#define DEBUG
 
 /* 7-segments multiplexer
  *
@@ -108,6 +116,10 @@ static uint8_t display_dotmask;
 static uint8_t digit_count;
 static uint8_t ser_timeout;
 static uint8_t current_glyph;
+
+#ifdef DEBUG
+static uint16_t error_counter = 0;
+#endif
 
 // Here, it is assumed that 16 data element is enough to stay clear of "roundtrips", that is, data
 // writing 16 times before we have the change to read anything. The algo using this really must
@@ -403,9 +415,17 @@ void seg7multiplex_loop()
             ser_timeout--;
             if (ser_timeout == 0) {
                 end_input_mode();
+#ifdef DEBUG
                 // highlight the leftmost dot to indicate error in the previous
                 // reception.
                 display_dotmask = 0x1;
+                error_counter++;
+                digit_count = 0;
+                push_digit(0);
+                push_digit(0);
+                push_digit(0);
+                push_digit(ser_input_pos);
+#endif
             }
         }
     } else {
