@@ -36,14 +36,7 @@ static void push_serial(bool high)
 {
     icemu_pin_set(&clk, false);
     icemu_pin_set(&ser, high);
-    /* These 20us delays are necessary when running in FTDI mode with the prototype connected
-     * to our two serial pins. Without those delays, CLK toggles too fast for the MCU. 20us seems
-     * rather high to me, I'm not so sure why it's so high, but then again, it's the threshold that
-     * works without sending corrupt digits. 40us per bit means 200us per digit. Fair enough.
-     */
-    icemu_sim_delay(20);
     icemu_pin_set(&clk, true);
-    icemu_sim_delay(20);
 }
 
 static void push_digit(uint8_t digit, bool enable_dot)
@@ -140,6 +133,15 @@ int main()
 
     has_ftdi = icemu_FT232H_init(&ftdi);
     if (has_ftdi) {
+        ICePin power;
+        icemu_pin_init(&power, NULL, "PWR", true);
+        icemu_pin_set(&power, true);
+        // Some FTDI device are powered by 5V, but use 3.3V logic.
+        // We run on 3.3V, no problem, but if you power the device
+        // with 5V and send 3.3V logic, it's not going to work. You
+        // have to power it with 3.3V. If your FTDI device doesn't
+        // supply a 3.3V power pin, use D3, it's always powered on.
+        icemu_pin_wireto(&power, icemu_chip_getpin(&ftdi, "D3"));
         icemu_pin_wireto(&ser, icemu_chip_getpin(&ftdi, "D0"));
         icemu_pin_wireto(&clk, icemu_chip_getpin(&ftdi, "D1"));
     }
