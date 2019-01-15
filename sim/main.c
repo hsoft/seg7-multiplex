@@ -160,7 +160,7 @@ int main()
         icemu_ui_add_element("FTDI", &ftdi);
     }
     for (i = 0; i < DIGITS; i++) {
-        icemu_ui_add_element("", &circuit.segs[i]);
+        icemu_ui_add_element("", &circuit.segs[DIGITS - i - 1]);
     }
     push_number(display_val, display_dotmask);
     icemu_sim_run();
