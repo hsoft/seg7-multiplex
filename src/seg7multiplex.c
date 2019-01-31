@@ -120,9 +120,15 @@ static uint8_t ser_input_pos;
 // First element of array is rightmost digit
 static uint8_t display_digits[DIGITS] = {1, 8, 2, 1};
 static uint8_t display_dotmask;
-static uint8_t digit_count;
 static uint8_t ser_timeout;
 static uint8_t current_glyph;
+
+/* When in normal mode, represents the current digit index we are refreshing.
+ * when current_digit == DIGITS, we're in the "DP" round, that is, we display
+ * our dots using display_dotmask. Then, we cycle back to 0.
+ *
+ * When in input mode, this represents the current digit being received.
+ */
 static uint8_t current_digit;
 
 #ifdef DEBUG
@@ -297,7 +303,7 @@ static bool perform_display_step()
 static void push_digit(uint8_t value)
 {
     if (value & 0b10000) {
-        display_dotmask |= (1 << digit_count);
+        display_dotmask |= (1 << current_digit);
         value &= 0b1111;
     }
     if (value >= 10) {
@@ -305,17 +311,17 @@ static void push_digit(uint8_t value)
         return;
     }
 
-    if (digit_count < DIGITS) {
-        display_digits[digit_count] = value;
+    if (current_digit < DIGITS) {
+        display_digits[current_digit] = value;
     }
-    digit_count++;
+    current_digit++;
 }
 
 static void begin_input_mode()
 {
     input_mode = true;
     ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
-    digit_count = 0;
+    current_digit = 0;
     display_dotmask = 0;
     ser_input_pos = 0;
     ser_input = 0;
@@ -324,6 +330,7 @@ static void begin_input_mode()
 static void end_input_mode()
 {
     input_mode = false;
+    current_digit = 0;
     ser_timeout = 0;
     serial_queue_init();
 }
@@ -402,7 +409,7 @@ void seg7multiplex_loop()
                 push_digit(ser_input);
                 ser_input = 0;
                 ser_input_pos = 0;
-                if (digit_count == DIGITS) {
+                if (current_digit == DIGITS) {
                     // We're done here
                     end_input_mode();
                     // Return now so we don't execute the ser_timeout code
@@ -424,7 +431,6 @@ void seg7multiplex_loop()
                 // reception.
                 display_dotmask = 0x1;
                 error_counter++;
-                digit_count = 0;
                 push_digit(0);
                 push_digit(0);
                 push_digit(0);
