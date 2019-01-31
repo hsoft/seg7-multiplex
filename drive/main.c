@@ -44,6 +44,7 @@ void digit(uint8_t digit)
 void send(uint16_t val)
 {
     uint8_t digits[DIGITS];
+    uint8_t verif = 0;
 
     /* The computation below doesn't look like much, but it's actually intensive
      * for the MCU. If it has to perform it while clocking has begun, we bust
@@ -53,6 +54,7 @@ void send(uint16_t val)
      */
     for (int i=0; i < DIGITS; i++) {
         digits[i] = (val / int_pow10(i)) % 10;
+        verif += digits[i];
     }
 
     // Empty CLK to begin
@@ -60,6 +62,11 @@ void send(uint16_t val)
     for (int i=0; i < DIGITS; i++) {
         digit(digits[i]);
     }
+    clock(verif & 1);
+    clock(verif & (1 << 1));
+    clock(verif & (1 << 2));
+    clock(verif & (1 << 3));
+    clock(verif & (1 << 4));
 }
 
 ISR(TIMER0_COMPA_vect)

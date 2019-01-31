@@ -50,20 +50,30 @@ static void push_digit(uint8_t digit, bool enable_dot)
     push_serial(enable_dot);
 }
 
-static void push_number(uint32_t val, uint8_t display_dotmask)
+static void push_number(uint32_t val, uint8_t display_dotmask, bool buggy)
 {
-    int i;
-    bool hasdot;
+    int verif = 0;
 
     // we start with an empty CLK to begin;
     push_serial(false);
 
-    for (i = 0; i < DIGITS; i++) {
-        hasdot = display_dotmask & (1 << i);
-        push_digit((val / int_pow10(i)) % 10, hasdot);
+    for (int i=0; i<DIGITS; i++) {
+        bool hasdot = display_dotmask & (1 << i);
+        int tosend = (val / int_pow10(i)) % 10;
+        verif += tosend;
+        push_digit(tosend, hasdot);
         // let the runloop breathe a little
         seg7multiplex_loop();
     }
+    if (buggy) {
+        verif++;
+    }
+    push_serial(verif & 1);
+    push_serial(verif & (1 << 1));
+    push_serial(verif & (1 << 2));
+    push_serial(verif & (1 << 3));
+    push_serial(verif & (1 << 4));
+    seg7multiplex_loop();
 }
 
 /* Layer impl */
@@ -106,24 +116,24 @@ void set_timer0_mode(TIMER_MODE mode)
 static void increase_value()
 {
     display_val++;
-    push_number(display_val, display_dotmask);
+    push_number(display_val, display_dotmask, false);
 }
 
 static void decrease_value()
 {
     display_val--;
-    push_number(display_val, display_dotmask);
+    push_number(display_val, display_dotmask, false);
 }
 
 static void cycle_dotmask()
 {
     display_dotmask++;
-    push_number(display_val, display_dotmask);
+    push_number(display_val, display_dotmask, false);
 }
 
 static void send_buggy()
 {
-    push_serial(false);
+    push_number(display_val, display_dotmask, true);
 }
 
 int main()
@@ -168,7 +178,7 @@ int main()
     for (i = 0; i < DIGITS; i++) {
         icemu_ui_add_element("", &circuit.segs[DIGITS - i - 1]);
     }
-    push_number(display_val, display_dotmask);
+    push_number(display_val, display_dotmask, false);
     icemu_sim_run();
     return 0;
 }

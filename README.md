@@ -22,11 +22,15 @@ significant bit) and ending with a "dot" bit that determines if the dot is
 shown or not.
 
 This is done for each digit that needs to be shown (starting with the rightmost
-digit). Thus, to show 2 digits, we send 10 bits.
+digit). This means 20 bits.
 
-The number of digits being used by the multiplexer has to be known by the sender
-because the multiplexer expects exactly the number of bits it needs to fill
-all its digits.
+Following that, we have a checksum which is the sum, in binary form, of the
+sent digits. That sum is 5 bits long. It's not enough to hold the maximum value
+(36) of that sum, but being 5 bits simplifies the code and is solid enough for
+our purpose. Dot masks aren't checksummed.
+
+If the checksum doesn't match the received number, the display shows an error
+that can't be mistaken for a real number.
 
 I could have gone for sending straight binary values instead of digits but I
 thought it would be nice to eventually add support for special values (dash,

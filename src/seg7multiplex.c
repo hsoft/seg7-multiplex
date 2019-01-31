@@ -25,7 +25,7 @@
 
 /* "Buffer clock" pin of the shift register. Also wired to OE.
  *
- * We generally want to keep this pin LOW so that outputs are enabled most of\
+ * We generally want to keep this pin LOW so that outputs are enabled most of
  * the time.
  */
 #define RCLK PinB0
@@ -73,7 +73,8 @@
  * SER_DP LOW (enabled) along with a display mask in the shift register to
  * specify which displays get the dot.
  *
- * The number to display is sent serially through INSER and INCLK.
+ * The number to display is sent serially through INSER and INCLK. See README
+ * for a description of the custom communication protocol.
  *
  * Making the choice of an ATtiny MCU greatly limits our available pins and
  * forces us to make interesting compromises. To maximize the responsiveness of
@@ -335,6 +336,24 @@ static void end_input_mode()
     serial_queue_init();
 }
 
+static void set_error_mode()
+{
+#ifdef DEBUG
+    // highlight the leftmost dot to indicate error in the previous
+    // reception.
+    display_dotmask = 0x1;
+    error_counter++;
+    push_digit(0);
+    push_digit(0);
+    push_digit(0);
+    push_digit(ser_input_pos);
+#else
+    for (uint8_t i=0; i<DIGITS; i++) {
+        display_digits[i] = ERROR_GLYPH;
+    }
+#endif
+}
+
 #ifndef SIMULATION
 ISR(INT0_vect)
 #else
@@ -406,10 +425,19 @@ void seg7multiplex_loop()
             // We've received data, re-init ser_timer countdown
             ser_timeout = MAX_SER_CYCLES_BEFORE_TIMEOUT;
             if (ser_input_pos == 5) {
-                push_digit(ser_input);
-                ser_input = 0;
-                ser_input_pos = 0;
-                if (current_digit == DIGITS) {
+                if (current_digit < DIGITS) {
+                    push_digit(ser_input);
+                    ser_input = 0;
+                    ser_input_pos = 0;
+                } else {
+                    // We've received our verification code
+                    uint8_t expected = 0;
+                    for (uint8_t i=0; i<DIGITS; i++) {
+                        expected += display_digits[i];
+                    }
+                    if (ser_input != expected) {
+                        set_error_mode();
+                    }
                     // We're done here
                     end_input_mode();
                     // Return now so we don't execute the ser_timeout code
@@ -426,20 +454,7 @@ void seg7multiplex_loop()
             ser_timeout--;
             if (ser_timeout == 0) {
                 end_input_mode();
-#ifdef DEBUG
-                // highlight the leftmost dot to indicate error in the previous
-                // reception.
-                display_dotmask = 0x1;
-                error_counter++;
-                push_digit(0);
-                push_digit(0);
-                push_digit(0);
-                push_digit(ser_input_pos);
-#else
-                for (int i=0; i<DIGITS; i++) {
-                    display_digits[i] = ERROR_GLYPH;
-                }
-#endif
+                set_error_mode();
             }
         }
     } else {
