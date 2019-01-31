@@ -103,22 +103,27 @@ void set_timer0_mode(TIMER_MODE mode)
 }
 
 /* Main */
-void increase_value()
+static void increase_value()
 {
     display_val++;
     push_number(display_val, display_dotmask);
 }
 
-void decrease_value()
+static void decrease_value()
 {
     display_val--;
     push_number(display_val, display_dotmask);
 }
 
-void cycle_dotmask()
+static void cycle_dotmask()
 {
     display_dotmask++;
     push_number(display_val, display_dotmask);
+}
+
+static void send_buggy()
+{
+    push_serial(false);
 }
 
 int main()
@@ -153,6 +158,7 @@ int main()
     icemu_sim_add_action('+', "(+) Increase Value", increase_value);
     icemu_sim_add_action('-', "(-) Decrease Value", decrease_value);
     icemu_sim_add_action('d', "Cycle (d)otmask", cycle_dotmask);
+    icemu_sim_add_action('b', "Send (b)uggy value", send_buggy);
     icemu_ui_add_element("MCU", &circuit.mcu);
     icemu_ui_add_element("SR", &circuit.sr);
     icemu_ui_add_element("DEC", &circuit.dec);

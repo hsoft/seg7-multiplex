@@ -47,7 +47,14 @@
  * number of times in a row we had an error condition and the rightmost digit\
  * is the number of clocks that our last communication attempt expired at.
  */
-#define DEBUG
+// #define DEBUG
+
+/* SN74LS47 doesn't have a dash, which would look better. Choose something that
+ * unambiguously indicate an error so that we don't mistake it for a real
+ * number.
+ */
+#define ERROR_GLYPH 12
+#define BLANK_GLYPH 15
 
 /* 7-segments multiplexer
  *
@@ -116,6 +123,7 @@ static uint8_t display_dotmask;
 static uint8_t digit_count;
 static uint8_t ser_timeout;
 static uint8_t current_glyph;
+static uint8_t current_digit;
 
 #ifdef DEBUG
 static uint16_t error_counter = 0;
@@ -219,35 +227,30 @@ static SRValueSenderStatus sr_sender_step()
     return res;
 }
 
-static bool select_next_glyph()
+static void select_next_digit()
 {
     // low 4 bits of tosend contain the display mask.
     // high 4 bits of tosend contain the glyph number.
     uint8_t tosend = 0;
     uint8_t i;
-    bool res = false;
 
-    if (current_glyph == 10) {
+    if (current_digit == DIGITS) {
+        current_digit = 0;
         // Round of DP display
-        // 15 is the "blank" glyph.
         if (display_dotmask) {
-            init_sr_sender(display_dotmask | (15 << 4));
-            res = true;
+            current_glyph = BLANK_GLYPH;
+            init_sr_sender(display_dotmask | (BLANK_GLYPH << 4));
+            return;
         }
-        current_glyph = 0;
-    } else {
-        for (i=0; i<DIGITS; i++) {
-            if (display_digits[i] == current_glyph) {
-                tosend |= (1 << i);
-            }
-        }
-        if (tosend) {
-            init_sr_sender(tosend | (current_glyph << 4));
-            res = true;
-        }
-        current_glyph++;
     }
-    return res;
+    current_glyph = display_digits[current_digit];
+    for (i=0; i<DIGITS; i++) {
+        if (display_digits[i] == current_glyph) {
+            tosend |= (1 << i);
+        }
+    }
+    init_sr_sender(tosend | (current_glyph << 4));
+    current_digit++;
 }
 
 // Returns whether we had anything to do at all
@@ -275,7 +278,7 @@ static bool perform_display_step()
             break;
         case SRValueSenderStatus_Last:
             // Only enable DP (low) during the DP round.
-            pinset(SER_DP, current_glyph != 0);
+            pinset(SER_DP, current_glyph != BLANK_GLYPH);
             // Flush out the buffer with RCLK
             pinlow(RCLK); // OE enabled, but SR buffer isn't flushed
             _delay_us(1);
@@ -371,6 +374,7 @@ void seg7multiplex_setup()
     display_dotmask = 0;
     ser_timeout = 0;
     current_glyph = 0;
+    current_digit = 0;
     refresh_needed = true;
 
     // Set timer that controls refreshes
@@ -425,14 +429,19 @@ void seg7multiplex_loop()
                 push_digit(0);
                 push_digit(0);
                 push_digit(ser_input_pos);
+#else
+                for (int i=0; i<DIGITS; i++) {
+                    display_digits[i] = ERROR_GLYPH;
+                }
 #endif
             }
         }
     } else {
         while (perform_display_step()) { if (input_mode) return; }
         if (refresh_needed) {
-            while (!select_next_glyph()){ if (input_mode) return; }
+            select_next_digit();
             refresh_needed = false;
+            if (input_mode) return;
         }
     }
 }
