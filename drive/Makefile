@@ -7,7 +7,7 @@ AVRDUDEARGS ?= -c usbtiny -P usb
 CC = avr-gcc
 
 OBJS = main.o
-OBJS += $(addprefix ../common/, pin.o timer.o intmath.o)
+OBJS += $(addprefix ../common/, pin.o timer.o intmath.o seg7serial.o)
 
 TO_CLEAN = $(OBJS) $(PROGNAME).hex $(PROGNAME).bin
 
