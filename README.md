@@ -4,15 +4,16 @@ This board is a multiplexed array of 4 7-segment displays that receives its
 input through a custom serial protocol. The board uses a USB-A connector to
 connect `VCC`, `GND` and its two serial pins. It's multiplexed to minimize the
 number of pins and ICs we need to use. We end up only needing an ATtiny45 and
-2 ICs to drive pu the 4 displays.
+2 ICs to drive the 4 displays.
 
 The goal is to be able to offload the "digit display" complexity off little
 devices I'm planning to do. Of course, there's tons of ready-to-use displays
 out there but I'd like to explore simple and minimal designs.
 
-I'm also hoping to have something that draws minimal current. My first
-prototype works on 3V and draws less than 6mA. For reference, the backlight of
-a typical 2x8 LCD screen draws something like 20-40mA.
+I'm also hoping to have something that draws minimal current. My current
+prototype (v3) works on 3V and draws about 7mA when it's not receiving data. For
+reference, the backlight of a typical 2x8 LCD screen draws something like
+20-40mA.
 
 ## Serial protocol
 
@@ -39,6 +40,28 @@ empty, etc)
 The board itself takes care of properly refreshing the displays. We refresh one
 display every 1ms, cycling over active displays. We only need to send new digits
 when they change.
+
+## ASM rewrite in progress
+
+I recently swam a bit in AVR assembler and I liked it very much. The `objdump`
+difference between a binary compiled with `avr-gcc` and a hand-written asm one
+is startling!
+
+Because the fun with AVR is to squeeze every last bit of processing from each
+joule, it makes much more sense to do so in assembler.
+
+I'm currently in the process of rewriting the software for this multiplexer in
+assembler with the hopes that it will increase its input capacity (currently,
+a delay of 300us is required between input clocks for the MCU to reliably take
+data in. it's way too high). From what I see in objdumps, there's a lot of fat
+to trim.
+
+I could adjust my C coding style so that it generates faster code, but doing
+this skillfully requires a good knowledge of AVR assembler. If I have to learn
+this, why not write assembler directly?
+
+Currently, the repo contains both new and old code, new and old simulations.
+When I get to feature parity, I'll trim the old code.
 
 ## Prototypes
 
@@ -145,10 +168,11 @@ to reset the counter to enforce syncing (not enough pins).
 
 ## Simulation
 
-This project can be simulated on a desktop computer! The simulation uses
-[icemu][icemu]. To run it, `cd` into `sim` and run `make`, then
-`./seg7multiplex`. You'll get something like this:
+This project can be run on a desktop computer through [simavr][simavr]. It 
+produces a VCD file which can then be opened with [gtkwave][gtkwave].
 
-[![asciinema](https://asciinema.org/a/RxFAJOHpEg3R0Vu5M7mUI73sD.png)](https://asciinema.org/a/RxFAJOHpEg3R0Vu5M7mUI73sD)
+You can compile the simulation with `make simulation` and then run the
+resulting executable without parameters.
 
-[icemu]: https://github.com/hsoft/icemu
+[simavr]: https://github.com/buserror/simavr
+[gtkwave]: http://gtkwave.sourceforge.net/
