@@ -11,6 +11,9 @@
 ; R17: hold SREG during interrupts
 ; R18: value to send to the SR. cleared at every SENDSR call
 ; R30: (low Z) current digit being refreshed. cycles from 0 to 3
+; 
+; Notes on register usage
+; R1 - R4: 4 low bits are for digit, 5th bit is for dot. other bits are unused.
 
 ; I/O registers
 .equ DDRB, 0x17
@@ -78,6 +81,7 @@ MAIN:
 	DEC	R16
 	ST	Z+, R16		; 2
 	DEC	R16
+	ORI	R16, 0b00010000	; DP
 	ST	Z, R16		; 1
 	CLR	R30		; replace Z to 0
 
@@ -116,6 +120,15 @@ RDISP:
 	BRLO	.+2		; lower than 4 ? don't reset
 	CLR	R30		; not lower than 4? reset
 
+	; in the next step, we're going to join R18 and R16 together, but
+	; before we do, we have one thing to process: R18's 5th bit. If it's
+	; high, it means that DP is highlighted. We have to store this
+	; information in R6 and use it later. Also, we have to clear the higher
+	; bits of R18.
+	SBRC	R18, 4		; 5th bit cleared? skip next
+	INC	R6		; if set, then set R6 as well
+	ANDI	R18, 0xf	; clear higher bits
+
 	; Now we have our display selector in R16 and our digit to display in
 	; R18. We want it all in R18.
 	SWAP	R18		; digit goes in high "nibble"
@@ -138,8 +151,15 @@ RDISP:
 	SBI	PORTB, RCLK	; SR buffer flushed, OE disabled
 	NOP
 	CBI	PORTB, RCLK	; OE enabled
-	SBI	PORTB, SER_DP	; keep SER_SP high
-	RET
+
+	; We're finished! Oh no wait, one last thing: should we highlight DP?
+	; If we should, then we should keep SER_DP low rather than high for this
+	; SR round.
+	SBI	PORTB, SER_DP	; SER_DP generally kept high
+	SBRC	R6, 0		; R6 is cleared? skip DP set
+	CBI	PORTB, SER_DP	; SER_DP low highlight DP
+
+	RET			; finished for real this time!
 
 ; send R18 to shift register.
 ; We send highest bits first so that QH is the MSB and QA is the LSB
