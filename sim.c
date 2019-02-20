@@ -39,6 +39,16 @@ int main(int argc, char *argv[])
 	avr_init(drive);
 	avr_load_firmware(drive, &fdrive);
 
+    // INCLK
+    avr_connect_irq(
+		avr_io_getirq(drive, AVR_IOCTL_IOPORT_GETIRQ('B'), 0),
+		avr_io_getirq(seg7, AVR_IOCTL_IOPORT_GETIRQ('B'), 2)
+    );
+    // INSER
+    avr_connect_irq(
+		avr_io_getirq(drive, AVR_IOCTL_IOPORT_GETIRQ('B'), 1),
+		avr_io_getirq(seg7, AVR_IOCTL_IOPORT_GETIRQ('B'), 1)
+    );
 	avr_vcd_init(seg7, "gtkwave_output.vcd", &vcd_file, 2000);
 	avr_vcd_add_signal(&vcd_file,
 		avr_io_getirq(seg7, AVR_IOCTL_IOPORT_GETIRQ('B'), 0), 1,

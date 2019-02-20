@@ -10,7 +10,7 @@
 #define CLK PinB0
 #define SER PinB1
 
-static uint16_t val_to_send = 1234;
+static uint16_t val_to_send = 2345;
 volatile static bool should_send = false;
 
 ISR(TIMER0_COMPA_vect)
