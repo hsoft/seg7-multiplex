@@ -1,10 +1,10 @@
 ; 7-segments multiplexer for an ATtiny45
 ;
 ; Register usage
-; R1: Digit 1 (leftmost, QH on the SR)
-; R2: Digit 2 (QG on the SR)
-; R3: Digit 3 (QF on the SR)
-; R4: Digit 3 (rightmost, QE on the SR)
+; R1: Digit on AFF1 (rightmost, QH on the SR)
+; R2: Digit on AFF2 (QG on the SR)
+; R3: Digit on AFF3 (QF on the SR)
+; R4: Digit on AFF4 (leftmost, QE on the SR)
 ; R5: whether we need a refresh
 ; R6: generic tmp value
 ; R16: generic tmp value
@@ -14,6 +14,10 @@
 ; 
 ; Notes on register usage
 ; R1 - R4: 4 low bits are for digit, 5th bit is for dot. other bits are unused.
+;
+; Notes on AFF1-4
+; They are reversed (depending on how you see things...). They read right to
+; left. That means that AFF1 is least significant, AFF4 is most.
 
 ; I/O registers
 .equ DDRB, 0x17

@@ -19,8 +19,20 @@ reference, the backlight of a typical 2x8 LCD screen draws something like
 
 It works by serially sending it 5 bits of data using `INSER` and `INCLK`, the
 first 4 bits being an encoded digit from `0` to `9` (starting with the least
-significant bit) and ending with a "dot" bit that determines if the dot is
+significant digit) and ending with a "dot" bit that determines if the dot is
 shown or not.
+
+Before that, a single "empty" clock is sent to "wake" the MCU up and give it
+time to put itself in "input" mode (that is, give it time to finish its current
+refresh operation, if any)
+
+Thus, to send "43.21", the bits to be sent would be:
+
+    00100 (4)
+    10011 (3 + dot)
+    00010 (2)
+    00001 (1)
+    01010 (10, the checksum of 4 + 3 + 2 + 1)
 
 This is done for each digit that needs to be shown (starting with the rightmost
 digit). This means 20 bits.
