@@ -178,6 +178,16 @@ Moreover, althrough I didn't experience it, I felt that the CNT approach was
 flaky: the counter **had** to stay in sync with the MCU and the MCU had no way
 to reset the counter to enforce syncing (not enough pins).
 
+## Build
+
+To build the software, you need:
+
+* [AVRA][avra]
+* [avrdude][avrdude] to send firmware to MCUs
+
+You can build the resulting `seg7multiplex.S.hex` with `make` and send it to
+the MCU through `avrdude` with `make send`.
+
 ## Simulation
 
 This project can be run on a desktop computer through [simavr][simavr]. It 
@@ -186,5 +196,13 @@ produces a VCD file which can then be opened with [gtkwave][gtkwave].
 You can compile the simulation with `make simulation` and then run the
 resulting executable without parameters.
 
+The simulation runs two MCUs at the same time. First, of course, the
+`seg7multiplex` program, but also, on a separate virtual attiny45, the `drive`
+program. It hooks them up together and let them run for 2 seconds.
+
+The resulting gtkwave file is very insightful for debugging.
+
+[avra]: http://avra.sourceforge.net/
+[avrdude]: https://www.nongnu.org/avrdude/
 [simavr]: https://github.com/buserror/simavr
 [gtkwave]: http://gtkwave.sourceforge.net/

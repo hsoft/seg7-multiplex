@@ -1,29 +1,23 @@
 PROGNAME = seg7multiplex
-MCU ?= attiny45
 AVRDUDEMCU ?= t45
 AVRDUDEARGS ?= -c usbtiny -P usb 
-
-LDFLAGS = -mmcu=$(MCU)
+TARGET = $(PROGNAME).S.hex
 
 # Rules
 
 .PHONY: send all clean
 
-all: $(PROGNAME).hex
+all: $(TARGET)
 	@echo Done!
 
-send: $(PROGNAME).hex
-	avrdude $(AVRDUDEARGS) -p $(AVRDUDEMCU) -U flash:w:$(PROGNAME).hex
+send: $(TARGET)
+	avrdude $(AVRDUDEARGS) -p $(AVRDUDEMCU) -U flash:w:$(TARGET)
 
-$(PROGNAME).bin: $(PROGNAME).S
-	avr-gcc -mmcu=$(MCU) -o $@ $< -nostdlib
+$(TARGET): $(PROGNAME).S
+	avra -I /usr/include/avr $<
 
-$(PROGNAME).hex: $(PROGNAME).bin
-	avr-objcopy -O ihex -R .eeprom $< $@
-
-simulation: sim.c $(PROGNAME).bin
+simulation: sim.c $(TARGET)
 	$(CC) -lsimavr -lm -lelf $< -o $@
 
 clean:
-	rm -f $(PROGNAME).hex $(PROGNAME).bin
-
+	rm -f $(TARGET) $(PROGNAME).S.eep.hex $(PROGNAME).S.cof $(PROGNAME).S.obj simulation

@@ -27,41 +27,27 @@
 ; When in input mode, TIMER0_OVF, instead of setting the refresh flag, increases
 ; the counter. When it reaches 3, we timeout and consider input invalid.
 
-; I/O registers
-.equ GPIOR0, 0x11
-.equ DDRB, 0x17
-.equ PORTB, 0x18
-.equ TCNT0, 0x32
-.equ TCCR0B, 0x33
-.equ MCUCR, 0x35
-.equ TIMSK, 0x39
-.equ GIMSK, 0x3b
-.equ SPL, 0x3d
-.equ SPH, 0x3e
-.equ SREG, 0x3f
+.include "tn45def.inc"
 
 ; pins
-.equ RCLK, 0	; on PORTB
-.equ SRCLK, 3	; on PORTB
-.equ SER_DP, 4	; on PORTB
-
-; Misc
-.equ RAMEND, 0x015f
+.equ RCLK = 0	; on PORTB
+.equ SRCLK = 3	; on PORTB
+.equ SER_DP = 4	; on PORTB
 
 ; Let's begin!
 
 .org 0x0000
         RJMP    MAIN
-	RJMP	INT0
+	RJMP	INT_INT0
 	RETI	; PCINT0
 	RETI	; TIMER1_COMPA
 	RETI	; TIMER1_OVF
-	RJMP	TIMER0_OVF
+	RJMP	INT_TIMER0_OVF
 
 MAIN:
-	LDI	R16, lo8(RAMEND)
+	LDI	R16, low(RAMEND)
         OUT	SPL, R16
-        LDI	R16, hi8(RAMEND)
+        LDI	R16, high(RAMEND)
 	OUT	SPH, R16
 
 	SBI	DDRB, RCLK
@@ -94,7 +80,7 @@ MAIN:
 	; R31 in other situations. We can set it once and forget about it.
 	CLR	R31	; high Z
 	
-	# put 4321 in R2-5
+	; put 4321 in R2-5
 	CLR	R30	; low Z
 	LDI	R16, 0x04
 	ST	Z+, R16		; 4
@@ -136,7 +122,7 @@ LOOP_INPT:
 	; re-enable refresh flag so that we refresh right after timeout rather
 	; than witing the next TIMER0_OVF.
 	SBI	GPIOR0, 0
-        RJMP    LOOP+2		; +2 so we skip SLEEP
+        RJMP    LOOP+1		; +1 so we skip SLEEP
 
 
 ; ***** ROUTINES *****
@@ -154,17 +140,19 @@ RDISP:
 	MOV	R6, R30
 	INC	R6		; we need values 1-4, not 0-3
 	LDI	R16, 0x01
+RDISP1:
 	DEC	R6
-	BREQ	.+4		; == 0? we're finished
+	BREQ	RDISP2		; == 0? we're finished
 	LSL	R16
-	RJMP	.-8
+	RJMP	RDISP1
 
 	; select a digit to display
 	; we do so in a clever way: our registers just happen to be in SRAM
 	; locations 0x00, 0x01, 0x02 and 0x03. Handy eh!
+RDISP2:
 	LD	R18, Z+		; Indirect load of Z into R18 then increment
 	CPI	R30, 4
-	BRLO	.+2		; lower than 4 ? don't reset
+	BRLO	RDISP3		; lower than 4 ? don't reset
 	CLR	R30		; not lower than 4? reset
 
 	; in the next step, we're going to join R18 and R16 together, but
@@ -172,6 +160,7 @@ RDISP:
 	; high, it means that DP is highlighted. We have to store this
 	; information in R6 and use it later. Also, we have to clear the higher
 	; bits of R18.
+RDISP3:
 	SBRC	R18, 4		; 5th bit cleared? skip next
 	INC	R6		; if set, then set R6 as well
 	ANDI	R18, 0xf	; clear higher bits
@@ -233,7 +222,7 @@ TOGCP:
 ; ***** INTERRUPTS *****
 
 ; Enable input mode
-INT0:
+INT_INT0:
 	SBIC	GPIOR0, 1	; input mode off? continue further
 	RETI			; on? do nothing
 	IN	R17, SREG
@@ -244,7 +233,7 @@ INT0:
 
 ; Set refresh flag whenever timer0 overflows
 ; no SREG fiddling because no SREG-modifying instruction
-TIMER0_OVF:
+INT_TIMER0_OVF:
 	SBI	GPIOR0, 0
 	RETI
 
