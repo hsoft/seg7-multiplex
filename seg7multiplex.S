@@ -209,7 +209,7 @@ SENDSR:
 	RCALL	TOGCP
 	LSL	R18		; shift our data left
 	DEC	R16
-	BRNE	SENDSR+2	; not zero yet? loop! (+2 to avoid reset)
+	BRNE	SENDSR+1	; not zero yet? loop! (+1 to avoid reset)
 	RET
 
 ; toggle SRCLK, waiting 1us between pin changes
