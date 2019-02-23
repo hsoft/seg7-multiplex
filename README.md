@@ -18,18 +18,23 @@ reference, the backlight of a typical 2x8 LCD screen draws something like
 ## Serial protocol
 
 It works by serially sending it 5 bits of data using `INSER` and `INCLK`, the
-first 4 bits being an encoded digit from `0` to `9` (starting with the least
-significant digit) and ending with a "dot" bit that determines if the dot is
-shown or not.
+first 4 bits being an encoded digit from `0` to `9`. Each digit is sent
+starting with the most significant bit. Before each digit, a single bit is sent
+to indicate whether this digit has a dot. The first digit to be sent is the
+least significant digit (the rightmost).
 
 Before that, a single "empty" clock is sent to "wake" the MCU up and give it
 time to put itself in "input" mode (that is, give it time to finish its current
-refresh operation, if any)
+refresh operation, if any).
+
+The driver should wait 200us before the "wake up" trigger and the rest of the
+data so that we have time to finish any ongoing display refresh operation.
+after that, 50us between each clock should be enough.
 
 Thus, to send "43.21", the bits to be sent would be:
 
     00100 (4)
-    10011 (3 + dot)
+    10011 (dot + 3)
     00010 (2)
     00001 (1)
     01010 (10, the checksum of 4 + 3 + 2 + 1)

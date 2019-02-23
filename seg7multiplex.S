@@ -1,23 +1,25 @@
 ; 7-segments multiplexer for an ATtiny45
 ;
 ; Register usage
-; R1: Digit on AFF1 (rightmost, QH on the SR)
-; R2: Digit on AFF2 (QG on the SR)
-; R3: Digit on AFF3 (QF on the SR)
-; R4: Digit on AFF4 (leftmost, QE on the SR)
-; R5: input mode counter
+; R0: Digit on AFF1 (rightmost, QH on the SR)
+; R1: Digit on AFF2 (QG on the SR)
+; R2: Digit on AFF3 (QF on the SR)
+; R3: Digit on AFF4 (leftmost, QE on the SR)
+; R5: always zero
 ; R6: generic tmp value
 ; R16: generic tmp value
-; R17: hold SREG during interrupts
 ; R18: value to send to the SR. cleared at every SENDSR call
+;      in input mode, holds the input buffer
 ; R30: (low Z) current digit being refreshed. cycles from 0 to 3
 ; 
 ; Flags on GPIOs
 ; GPIOR0 - bit 0: Whether we need to refresh the display
-; GPIOR0 - bit 1: Whether we're in input mode
+; GPIOR0 - bit 1: Set when INT_INT0 has received a new bit
+; GPIOR0 - bit 2: The value of the new bit received
+; GPIOR0 - bit 4: input mode enabled
 
 ; Notes on register usage
-; R1 - R4: 4 low bits are for digit, 5th bit is for dot. other bits are unused.
+; R0 - R3: 4 low bits are for digit, 5th bit is for dot. other bits are unused.
 ;
 ; Notes on AFF1-4
 ; They are reversed (depending on how you see things...). They read right to
@@ -26,6 +28,29 @@
 ; Input mode counter
 ; When in input mode, TIMER0_OVF, instead of setting the refresh flag, increases
 ; the counter. When it reaches 3, we timeout and consider input invalid.
+;
+; Input procedure
+;
+; Input starts at INT_INT0. What it does there is very simple: is sets up a flag
+; telling it received something and conditionally sets another flag with the
+; value of the received bit.
+;
+; While we do that, we have the input loop eagerly checking for that flag. When
+; it triggers, it records the bit in R18. The way it does so is that it inits
+; R18 at 1 (not 0), then for every bit, it left shifts R18, then adds the new
+; bit. When the 6th bit of R18 is set, it means we have every bit we need, we
+; can flush it into Z.
+
+; Z points directly to R3, then R2, then R1, then R0. Because display refresh
+; is disabled during input, it won't result in weird displays, and because
+; partial numbers result in error display, then partial result won't lead to
+; weird displays, just error displays.
+;
+; When input mode begins, we change Z to point to R3 (the first digit we
+; receive) and we decrease the Z pointer after every digit we receive. When we
+; receive the last bit of the last digit and that we see that R30 is 0, we know
+; that the next (and last) digit is the checksum.
+
 
 .include "tn45def.inc"
 
@@ -33,6 +58,7 @@
 .equ RCLK = 0	; on PORTB
 .equ SRCLK = 3	; on PORTB
 .equ SER_DP = 4	; on PORTB
+.equ INSER = 1	; on PORTB
 
 ; Let's begin!
 
@@ -96,36 +122,12 @@ MAIN:
 	SEI
 
 LOOP:
-	SLEEP			; no use doing anything until we have an interrupt
-	SBIC	GPIOR0, 1	; input mode cleared? skip next
-	RJMP	LOOP_INPT	; input mode? jump!
+	RCALL	INPT_CHK	; verify that we shouldn't enter input mode
 	SBIC	GPIOR0, 0	; refesh flag cleared? skip next
 	RCALL	RDISP
         RJMP    LOOP
 
-; loop in input mode. When in input mode, we don't refresh the display, we use
-; all our processing power to process input. Also, we don't sleep
-LOOP_INPT:	
-	SBIS	GPIOR0, 0	; refesh flag set? skip next
-	RJMP	LOOP_INPT	; cleared? nothing to do
-	CBI	GPIOR0, 0	; clear refresh flag
-	INC	R5		; increase timeout
-
-	; did we reached our threshold yet?
-	SBRS	R5, 3		; bit 3 is set? threshold reached, skip RJMP
-	RJMP	LOOP_INPT	; not reached? loop
-
-	; We reached timeout. let's go back in normal mode
-	CLR	R5
-	CBI	GPIOR0, 1	; disable input mode
-	
-	; re-enable refresh flag so that we refresh right after timeout rather
-	; than witing the next TIMER0_OVF.
-	SBI	GPIOR0, 0
-        RJMP    LOOP+1		; +1 so we skip SLEEP
-
-
-; ***** ROUTINES *****
+; ***** DISPLAY *****
 
 ; refresh display with current number
 RDISP:
@@ -219,16 +221,106 @@ TOGCP:
 	SBI	PORTB, SRCLK	; high
 	RET
 
+; ***** INPUT MODE *****
+
+; check whether we should enter input mode and enter it if needed
+INPT_CHK:
+	SBIS	GPIOR0, 1	; did we just trigger INT_INT0?
+	RET			; no? return
+	; yes? continue in input mode
+
+; Initialize input mode and start the loop
+INPT_BEGIN:
+	SBI	GPIOR0, 4	; enable input mode
+	CBI	GPIOR0, 1	; The first trigger was an empty one
+
+	; At 1/8 prescaler, a "full" counter overflow is 2048us. That sounds
+	; about right for an input timeout. So we co the easy route and simply
+	; clear TCNT0 whenever we want to reset the timer
+	OUT	TCNT0, R5	; R5 == 0
+	CBI	GPIOR0, 0	; clear refresh flag in case it was just set
+	LDI	R30, 0x04	; make Z point on R3+1 (we use pre-decrement)
+	LDI	R18, 0x01	; initialize input buffer
+
+; loop in input mode. When in input mode, we don't refresh the display, we use
+; all our processing power to process input. Also, we don't sleep
+INPT_LOOP:	
+	RCALL	INPT_READ
+
+	; Check whether we've reached timeout
+	SBIC	GPIOR0, 0	; refesh flag cleared? skip next
+	CBI	GPIOR0, 4	; timeout reached, clear input flag
+
+	SBIC	GPIOR0, 4	; input mode cleared? skip next, to INPT_END
+	RJMP	INPT_LOOP	; not cleared? loop
+
+INPT_END:
+	; We received all our date or reached timeout. let's go back in normal
+	; mode.
+	CLR	R30		; Ensure Z isn't out of bounds
+	SBI	GPIOR0, 0	; set refresh flag so we start refreshing now
+	RET
+
+; Read, if needed, the last received bit
+INPT_READ:
+	SBIS	GPIOR0, 1
+	RET			; flag cleared? nothing to do
+
+	; Flag is set, we have to read
+	CBI	GPIOR0, 1	; unset flag
+	LSL	R18
+	SBIC	GPIOR0, 2	; data flag cleared? skip next
+	INC	R18
+	
+	; Now, let's check if we have our 5 digits
+	SBRC	R18, 5		; 6th bit cleared? nothing to do
+	RCALL	INPT_PUSH
+
+	OUT	TCNT0, R5	; clear timeout counter
+
+	RET
+
+; Push the digit currently in R18 in Z and reset R18.
+INPT_PUSH:
+	ANDI	R18, 0b00011111	; Remove 6th bit flag
+
+	TST	R30		; is R30 zero?
+	BREQ	INPT_CHECKSUM	; yes? it means we're at checksum phase.
+
+	; Otherwise, its a regular digit push
+	ST	-Z, R18
+	LDI	R18, 0x01
+	RET
+
+INPT_CHECKSUM:
+	CBI	GPIOR0, 4	; clear input mode, whether we error or not
+	MOV	R16, R0
+	ADD	R16, R1
+	ADD	R16, R2
+	ADD	R16, R3
+	CP	R16, R18
+	BRNE	INPT_ERROR
+	RET
+
+INPT_ERROR:
+	LDI	R16, 0x0c	; some weird digit
+	MOV	R0, R16
+	MOV	R1, R16
+	MOV	R2, R16
+	MOV	R3, R16
+	RET
+
 ; ***** INTERRUPTS *****
 
-; Enable input mode
+; Record received bit
+; The main loop has to be fast enough to process that bit before we receive the
+; next one!
+; no SREG fiddling because no SREG-modifying instruction
 INT_INT0:
-	SBIC	GPIOR0, 1	; input mode off? continue further
-	RETI			; on? do nothing
-	IN	R17, SREG
-	SBI	GPIOR0, 1	; input mode
-	CLR	R5		; clear timeout counter
-	OUT	SREG, R17
+	CBI	GPIOR0, 2	; clear received data
+	SBIC	PINB, INSER	; INSER clear? skip next
+	SBI	GPIOR0, 2	; INSER set? record this
+	SBI	GPIOR0, 1	; indicate that we've received a bit
 	RETI
 
 ; Set refresh flag whenever timer0 overflows
