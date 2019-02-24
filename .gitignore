@@ -1,8 +1,6 @@
-*.o
 *.hex
 *.bin
 *.vcd
 *.cof
 *.obj
 /simulation
-/sim/seg7multiplex

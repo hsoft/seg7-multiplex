@@ -58,28 +58,6 @@ The board itself takes care of properly refreshing the displays. We refresh one
 display every 1ms, cycling over active displays. We only need to send new digits
 when they change.
 
-## ASM rewrite in progress
-
-I recently swam a bit in AVR assembler and I liked it very much. The `objdump`
-difference between a binary compiled with `avr-gcc` and a hand-written asm one
-is startling!
-
-Because the fun with AVR is to squeeze every last bit of processing from each
-joule, it makes much more sense to do so in assembler.
-
-I'm currently in the process of rewriting the software for this multiplexer in
-assembler with the hopes that it will increase its input capacity (currently,
-a delay of 300us is required between input clocks for the MCU to reliably take
-data in. it's way too high). From what I see in objdumps, there's a lot of fat
-to trim.
-
-I could adjust my C coding style so that it generates faster code, but doing
-this skillfully requires a good knowledge of AVR assembler. If I have to learn
-this, why not write assembler directly?
-
-Currently, the repo contains both new and old code, new and old simulations.
-When I get to feature parity, I'll trim the old code.
-
 ## Prototypes
 
 ### v1
