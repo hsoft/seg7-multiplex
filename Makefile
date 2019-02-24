@@ -1,23 +1,27 @@
 PROGNAME = seg7multiplex
 AVRDUDEMCU ?= t45
 AVRDUDEARGS ?= -c usbtiny -P usb 
-TARGET = $(PROGNAME).S.hex
+TARGETS = $(PROGNAME).S.hex drive.S.hex
 
 # Rules
 
-.PHONY: send all clean
+.PHONY: send senddrive all clean
 
-all: $(TARGET)
+all: $(TARGETS)
 	@echo Done!
 
-send: $(TARGET)
-	avrdude $(AVRDUDEARGS) -p $(AVRDUDEMCU) -U flash:w:$(TARGET)
+send: $(PROGNAME).S.hex
+senddrive: drive.S.hex
+send senddrive:
+	avrdude $(AVRDUDEARGS) -p $(AVRDUDEMCU) -U flash:w:$<
 
-$(TARGET): $(PROGNAME).S
+$(PROGNAME).S.hex: $(PROGNAME).S
+drive.S.hex: drive.S
+$(TARGETS):
 	avra -I /usr/include/avr $<
 
-simulation: sim.c $(TARGET)
+simulation: sim.c $(TARGETS)
 	$(CC) -lsimavr -lm -lelf $< -o $@
 
 clean:
-	rm -f $(TARGET) $(PROGNAME).S.eep.hex $(PROGNAME).S.cof $(PROGNAME).S.obj simulation
+	rm -f $(TARGETS) *.S.eep.hex *.S.cof *.S.obj simulation
