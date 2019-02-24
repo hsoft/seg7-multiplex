@@ -243,13 +243,13 @@ INPT_BEGIN:
 	LDI	R18, 0x01	; initialize input buffer
 
 ; loop in input mode. When in input mode, we don't refresh the display, we use
-; all our processing power to process input. Also, we don't sleep
+; all our processing power to process input.
 INPT_LOOP:	
 	RCALL	INPT_READ
 
 	; Check whether we've reached timeout
 	SBIC	GPIOR0, 0	; refesh flag cleared? skip next
-	CBI	GPIOR0, 4	; timeout reached, clear input flag
+	RCALL	INPT_TIMEOUT
 
 	SBIC	GPIOR0, 4	; input mode cleared? skip next, to INPT_END
 	RJMP	INPT_LOOP	; not cleared? loop
@@ -301,6 +301,10 @@ INPT_CHECKSUM:
 	CP	R16, R18
 	BRNE	INPT_ERROR
 	RET
+
+INPT_TIMEOUT:
+	CBI	GPIOR0, 4	; timeout reached, clear input flag
+	; continue to INPT_ERROR
 
 INPT_ERROR:
 	LDI	R16, 0x0c	; some weird digit
