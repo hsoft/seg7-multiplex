@@ -15,6 +15,10 @@ prototype (v3) works on 3V and draws about 7mA when it's not receiving data. For
 reference, the backlight of a typical 2x8 LCD screen draws something like
 20-40mA.
 
+Click on the image below for a video:
+
+[![vimeo](https://i.vimeocdn.com/video/771294303_677x.jpg)](https://vimeo.com/327108521)
+
 ## Serial protocol
 
 It works by serially sending it 5 bits of data using `INSER` and `INCLK`, the
