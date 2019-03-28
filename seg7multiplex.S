@@ -298,6 +298,9 @@ INPT_CHECKSUM:
 	ADD	R16, R1
 	ADD	R16, R2
 	ADD	R16, R3
+	; only consider the first 5 bits of the checksum since we can't receive
+	; more. Otherwise, we couldn't possibly validate a value like 9999
+	ANDI	R16, 0b00011111	
 	CP	R16, R18
 	BRNE	INPT_ERROR
 	RET
