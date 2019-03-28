@@ -45,8 +45,8 @@ avr_t* sim_init(const char *mcu_name, unsigned long freq, const char *hex_fname)
 
 int main(int argc, char *argv[])
 {
-    avr_t * seg7 = sim_init("attiny45", 1000000UL, "seg7multiplex.S.hex");
-    avr_t * drive = sim_init("attiny45", 1000000UL, "drive.S.hex");
+    avr_t * seg7 = sim_init("attiny45", 1000000UL, "seg7multiplex.hex");
+    avr_t * drive = sim_init("attiny45", 1000000UL, "drive.hex");
     if (seg7 == NULL || drive == NULL) {
         return 1;
     }
